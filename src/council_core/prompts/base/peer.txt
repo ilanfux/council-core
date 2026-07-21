@@ -1,0 +1,11 @@
+{n} advisors independently analyzed this case:
+---
+{brief}
+---
+Anonymized responses:
+{anonymized}
+
+Answer, referencing responses by letter, under 200 words:
+1. Which response is strongest, and why?
+2. Which has the biggest blind spot or weakest-supported claim? What is it missing?
+3. What did ALL responses miss that the council must consider?

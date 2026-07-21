@@ -1,0 +1,45 @@
+schema_version: 1
+id: finance
+version: 1.0.0
+display_name: Finance & Budget Council (Israel-first)
+
+routing:
+  triggers:
+    - pension
+    - provident
+    - keren hishtalmut
+    - study fund
+    - severance
+    - termination
+    - resignation
+    - dismissal
+    - section 14
+    - form 161
+    - salary
+    - budget
+    - mortgage
+    - loan
+    - debt
+    - tax
+    - rsu
+    - espp
+    - retirement
+    - insurance
+    - savings
+    - liquidity
+    - "cash flow"
+
+council:
+  personas_file: personas.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: documents
+
+output:
+  schema: finance_brief_v1
+
+execution:
+  policy_file: execution.yaml

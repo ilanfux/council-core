@@ -1,0 +1,40 @@
+schema_version: 1
+id: dev
+version: 1.0.0
+display_name: Dev Council
+
+routing:
+  triggers:
+    - code
+    - refactor
+    - bug
+    - review this
+    - pull request
+    - "pr "
+    - merge
+    - function
+    - class
+    - api
+    - migration
+    - schema
+    - endpoint
+    - test
+    - performance
+    - security
+    - architecture
+    - implementation
+
+council:
+  personas_file: personas.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: git_repo
+
+output:
+  schema: dev_review_v1
+
+execution:
+  policy_file: execution.yaml

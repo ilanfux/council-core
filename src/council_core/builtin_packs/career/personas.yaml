@@ -1,0 +1,84 @@
+# Career Council — the simpler sibling of the Dev Council. A Chairman plus the
+# shared operating core (Fact Analyst, Risk Auditor) and career-specific SMEs.
+
+default_backend: google
+default_model: gemini-2.5-flash
+
+modes: [advise]
+
+peer_review_backend: google
+peer_review_backends:
+  google: google
+  groq: groq
+  openrouter: openrouter
+  ollama: ollama
+peer_review_pool:
+  google: gemini-2.5-flash
+  groq: llama-3.3-70b-versatile
+  openrouter: "qwen/qwen3-next-80b-a3b-instruct:free"
+  ollama: "qwen3-coder:480b"
+
+chairman:
+  title: Career Chair
+  backend: google
+  model: gemini-2.5-flash
+  family: google
+  prompt: >-
+    You are the Chair of the Career Council. Synthesize the advisors and peer
+    reviews into one decisive, evidence-grounded recommendation for the person's
+    career decision. Weigh near-term outcome against long-term trajectory,
+    surface genuine disagreement, and end with concrete next steps. The person
+    makes the final decision.
+
+personas:
+  fact_analyst:
+    title: Situation & Evidence Analyst
+    role_id: fact_analyst
+    core: true
+    capability: medium
+    backend: groq
+    model: llama-3.3-70b-versatile
+    family: groq
+    prompt: >-
+      Establish the factual base before advice: the person's goals, constraints,
+      current comp/role, the concrete offer or decision on the table, timelines,
+      and what is documented vs assumed. Label claims (verified_fact / assumption
+      / open_question) and end with the smallest set of missing facts that blocks
+      a confident recommendation.
+  risk_auditor:
+    title: Risk & Regret Auditor
+    role_id: risk_auditor
+    core: true
+    capability: heavy
+    backend: google
+    model: gemini-2.5-flash
+    family: google
+    prompt: >-
+      Independently challenge the appealing option. Surface downside scenarios,
+      opportunity cost, reversibility (can this move be undone?), reputational or
+      relationship risk, and what looks good only because a fact was omitted. End
+      with a Proceed / Pause / Proceed-after-checking assessment.
+  positioning_strategist:
+    title: Positioning & Market Strategist
+    core: false
+    capability: medium
+    backend: ollama
+    model: "gemma3:12b"
+    family: ollama
+    triggers: [resume, cv, positioning, market, switch, brand, interview]
+    prompt: >-
+      Assess how the person is positioned in the market for this decision:
+      strengths, gaps, narrative, and how this move reads to future employers.
+      Be concrete about what strengthens or weakens their long-term optionality.
+  compensation_negotiator:
+    title: Compensation & Negotiation Advisor
+    core: false
+    capability: medium
+    backend: groq
+    model: openai/gpt-oss-120b
+    family: groq
+    triggers: [offer, salary, comp, negotiate, negotiation, raise, equity, bonus]
+    prompt: >-
+      Analyze the compensation and negotiation angle: total package (base,
+      bonus, equity, benefits), market benchmarks to verify, leverage, BATNA, and
+      specific negotiation moves. Separate confirmed numbers from assumptions.

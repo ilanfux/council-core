@@ -1,0 +1,8 @@
+# Medium stakes: prefer a verified base and adversarial review, but degrade with
+# an explicit warning rather than fail closed if one is unavailable.
+required_successful_roles: [fact_analyst, risk_auditor]
+on_missing_required_role: degrade_with_warning
+min_completed_advisors: 2
+min_completed_reviews: 0
+allow_same_family_fallback: true
+chairman_when_required_analysis_missing: synthesize_with_gap_note

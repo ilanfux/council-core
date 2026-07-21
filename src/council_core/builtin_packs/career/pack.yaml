@@ -1,0 +1,37 @@
+schema_version: 1
+id: career
+version: 1.0.0
+display_name: Career Council
+
+routing:
+  triggers:
+    - career
+    - job offer
+    - promotion
+    - resume
+    - cv
+    - "interview"
+    - negotiate
+    - negotiation
+    - raise
+    - manager
+    - role change
+    - switch jobs
+    - quit
+    - relocation
+    - title
+
+council:
+  personas_file: personas.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: documents
+
+output:
+  schema: generic_verdict_v1
+
+execution:
+  policy_file: execution.yaml

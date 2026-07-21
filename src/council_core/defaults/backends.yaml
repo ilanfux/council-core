@@ -1,0 +1,34 @@
+# Runtime engine config: execution backends + the pools used for dynamic
+# councils and synthesis. CREDENTIALS COME FROM ENVIRONMENT VARIABLES ONLY —
+# never put a key here. Users override any subset via ~/.council/backends.yaml.
+#
+# `type` selects the implementation (cursor | openai | anthropic | google) and
+# defaults to the backend name; set it only when aliasing (e.g. groq -> openai).
+
+backends:
+  cursor:     { type: cursor,    api_key_env: CURSOR_API_KEY }
+  openai:     { type: openai,    api_key_env: OPENAI_API_KEY, base_url_env: OPENAI_BASE_URL }
+  anthropic:  { type: anthropic, api_key_env: ANTHROPIC_API_KEY }
+  google:     { type: google,    api_key_env: GOOGLE_API_KEY }
+
+  # Free OpenAI-compatible backends (bring your own free keys).
+  groq:       { type: openai, api_key_env: GROQ_API_KEY,        base_url: https://api.groq.com/openai/v1 }
+  openrouter: { type: openai, api_key_env: OPENROUTER_API_KEY,  base_url: https://openrouter.ai/api/v1 }
+  ollama:     { type: openai, api_key_env: OLLAMA_API_KEY,      base_url: https://ollama.com/v1 }
+  github:     { type: openai, api_key_env: GITHUB_MODELS_TOKEN, base_url: https://models.github.ai/inference }
+
+# Cross-family pool for dynamically generated councils. Only entries whose
+# backend has ready credentials are used; assignments spread across families.
+dynamic_pool:
+  - { backend: google,     model: gemini-2.5-flash,                        family: google }
+  - { backend: groq,       model: llama-3.3-70b-versatile,                 family: groq }
+  - { backend: openrouter, model: "nvidia/nemotron-3-super-120b-a12b:free", family: openrouter }
+  - { backend: ollama,     model: "qwen3-coder:480b",                      family: ollama }
+
+# Chairman synthesis + roster architect (used for dynamic councils).
+chairman:  { backend: google, model: gemini-2.5-flash, family: google }
+architect: { backend: google, model: gemini-2.5-flash, family: google }
+
+budget:
+  monthly_agent_run_ceiling: 600
+  warn_fraction: 0.6

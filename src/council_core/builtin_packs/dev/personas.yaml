@@ -1,0 +1,170 @@
+# Dev Council roster, wired to free multi-family backends. Each persona sits on a
+# deliberately different family so peer review draws cross-family reviewers.
+
+default_backend: google
+default_model: gemini-2.5-flash
+
+modes: [review, plan]
+
+chairman:
+  title: Chairman
+  backend: google
+  model: gemini-2.5-flash
+  family: google
+
+peer_review_backend: google
+peer_review_backends:
+  google: google
+  groq: groq
+  openrouter: openrouter
+  ollama: ollama
+peer_review_pool:
+  google: gemini-2.5-flash
+  groq: llama-3.3-70b-versatile
+  openrouter: "qwen/qwen3-next-80b-a3b-instruct:free"
+  ollama: "qwen3-coder:480b"
+
+personas:
+  # ---- review mode ----
+  bug_hunter:
+    title: Bug Hunter
+    modes: [review]
+    core: true
+    capability: heavy
+    backend: groq
+    model: openai/gpt-oss-120b
+    family: groq
+    lens: >-
+      Logic and edge cases: null/None/undefined, off-by-one, boundary inputs,
+      empty collections, concurrency/races, resource leaks, swallowed or
+      incorrect error handling. Assume a bug exists and hunt it.
+  bug_hunter_deep:
+    title: Bug Hunter - Deep Reasoning
+    modes: [review]
+    core: false
+    capability: heavy
+    backend: openrouter
+    model: "nvidia/nemotron-3-ultra-550b-a55b:free"
+    family: openrouter
+    lens: >-
+      An independent second pass at correctness on a different model family.
+      Reason hard about concurrency and ordering, state-machine and error-path
+      correctness, and subtle logic/edge cases the first hunter may share a
+      blind spot on. Converge or dissent on your own evidence.
+  maintainability:
+    title: Maintainability Reviewer
+    modes: [review]
+    core: true
+    capability: light
+    backend: ollama
+    model: "gemma3:12b"
+    family: ollama
+    lens: >-
+      Readability, naming, SOLID, duplication, dead code, complexity, general
+      code quality.
+  test_reviewer:
+    title: Test Reviewer
+    modes: [review]
+    core: true
+    capability: medium
+    backend: google
+    model: gemini-2.5-flash
+    family: google
+    lens: >-
+      Coverage of the changed lines, missing edge-case and failure-path tests,
+      brittle or flaky tests, tests asserting the wrong thing.
+  standards_compliance:
+    title: Standards & Compliance Reviewer
+    modes: [review]
+    core: true
+    capability: medium
+    backend: groq
+    model: llama-3.3-70b-versatile
+    family: groq
+    lens: >-
+      Hold the change to the project's documented rules and contracts (README,
+      AGENTS/CLAUDE, config intent): inline imports, naming, layering,
+      hardcoded/environment-specific values, secret handling. Judge against the
+      written rule; treat documented intentional exceptions as compliant.
+  security:
+    title: Security Reviewer
+    modes: [review]
+    core: false
+    capability: heavy
+    backend: google
+    model: gemini-2.5-flash
+    family: google
+    triggers: [auth, secret, token, crypto, password, pii, injection, ssrf, upload]
+    lens: >-
+      Injection (SQL/command/template), authz/authn gaps, secrets in code/logs,
+      input validation, unsafe deserialization, weak crypto, SSRF/path traversal.
+  performance:
+    title: Performance Reviewer
+    modes: [review]
+    core: false
+    capability: heavy
+    backend: ollama
+    model: "qwen3-coder:480b"
+    family: ollama
+    triggers: [query, loop, hot path, n+1, pagination, cache, batch, latency, index]
+    lens: >-
+      N+1 queries, unbounded loops/allocations, blocking I/O on hot paths,
+      missing pagination, inefficient queries, missing/incorrect caching.
+  api_compat:
+    title: API Contract & Backward-Compat Reviewer
+    modes: [review]
+    core: false
+    capability: medium
+    backend: openrouter
+    model: "qwen/qwen3-next-80b-a3b-instruct:free"
+    family: openrouter
+    triggers: [api, dto, contract, schema, event, public, endpoint, version, payload]
+    lens: >-
+      Will this break consumers? Public API/DTO/event-schema changes,
+      removed/renamed fields, default/nullability changes, versioning.
+
+  # ---- plan mode ----
+  product_manager:
+    title: Product Manager
+    modes: [plan]
+    core: true
+    capability: light
+    backend: groq
+    model: llama-3.3-70b-versatile
+    family: groq
+    lens: >-
+      Are we solving the right problem? Real user/business value, who needs
+      this, correct scope, unstated/assumed requirements.
+  architect:
+    title: Architect
+    modes: [plan]
+    core: true
+    capability: heavy
+    backend: google
+    model: gemini-2.5-flash
+    family: google
+    lens: >-
+      System shape: boundaries and responsibilities, data model, API/contract
+      design, coupling, failure modes, backward compatibility, scalability.
+  pragmatist:
+    title: Dev Lead - The Pragmatist
+    modes: [plan]
+    core: true
+    capability: light
+    backend: ollama
+    model: "gemma3:12b"
+    family: ollama
+    lens: >-
+      Simplest thing that works. YAGNI, smallest diff, lowest risk now.
+      Suspicious of speculative abstraction and gold-plating.
+  long_term:
+    title: Dev Lead - The Long-term Engineer
+    modes: [plan]
+    core: true
+    capability: heavy
+    backend: groq
+    model: openai/gpt-oss-120b
+    family: groq
+    lens: >-
+      The codebase in 12 months. Correctness, testability, maintainability,
+      avoiding tech debt and footguns. Clashes with the Pragmatist by design.

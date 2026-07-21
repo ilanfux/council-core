@@ -1,0 +1,8 @@
+# Dev is not high-stakes: tolerate individual advisor failures and synthesize a
+# verdict from whoever completed. No structurally-required roles.
+required_successful_roles: []
+on_missing_required_role: degrade_with_warning
+min_completed_advisors: 1
+min_completed_reviews: 0
+allow_same_family_fallback: true
+chairman_when_required_analysis_missing: synthesize_with_gap_note
