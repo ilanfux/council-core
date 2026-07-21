@@ -26,7 +26,12 @@ council = "council_core.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-council_core = ["prompts/*"]
+council_core = [
+    "prompts/*",
+    "builtin_packs/**/*.yaml",
+    "builtin_packs/**/*.md",
+    "builtin_packs/**/*.txt",
+]
 
 [tool.ruff]
 line-length = 100
