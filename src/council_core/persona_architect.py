@@ -209,7 +209,11 @@ def normalize_and_repair(
     max_smes = max(0, contract.max_advisors - len(mandatory))
     if len(smes) > max_smes:
         for extra in smes[max_smes:]:
-            repairs.append(RosterRepair("trimmed_to_cap", f"dropped SME '{extra.role_id}' (cap {contract.max_total_personas})"))
+            repairs.append(RosterRepair(
+                "trimmed_to_cap",
+                f"dropped SME '{extra.role_id}' ({max_smes} SME slot(s) after mandatory roles; "
+                f"council cap {contract.max_total_personas})",
+            ))
         smes = smes[:max_smes]
 
     return mandatory + smes, repairs
