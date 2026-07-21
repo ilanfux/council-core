@@ -38,15 +38,25 @@ class ExecutionPolicy:
     @classmethod
     def from_dict(cls, data: Dict) -> "ExecutionPolicy":
         data = data or {}
+
+        def _int(key: str, default: int) -> int:
+            try:
+                return int(data.get(key, default))
+            except (TypeError, ValueError):
+                return default
+
+        try:
+            behavior = MissingRoleBehavior(str(data.get("on_missing_required_role", "degrade_with_warning")))
+        except ValueError:
+            behavior = MissingRoleBehavior.DEGRADE_WITH_WARNING
+
         return cls(
             required_successful_roles={str(r).strip() for r in data.get("required_successful_roles", []) if r},
-            on_missing_required_role=MissingRoleBehavior(
-                str(data.get("on_missing_required_role", "degrade_with_warning"))
-            ),
-            min_completed_advisors=int(data.get("min_completed_advisors", 1)),
-            min_completed_reviews=int(data.get("min_completed_reviews", 0)),
+            on_missing_required_role=behavior,
+            min_completed_advisors=_int("min_completed_advisors", 1),
+            min_completed_reviews=_int("min_completed_reviews", 0),
             allow_same_family_fallback=bool(data.get("allow_same_family_fallback", True)),
-            max_retries=int(data.get("max_retries", 0)),
+            max_retries=_int("max_retries", 0),
             chairman_when_required_analysis_missing=str(
                 data.get("chairman_when_required_analysis_missing", "synthesize_with_gap_note")
             ),

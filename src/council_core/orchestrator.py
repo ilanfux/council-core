@@ -91,12 +91,12 @@ def _apply_policy(
             status = RunStatus.DEGRADED
 
     if len(completed) < policy.min_completed_advisors:
+        # A hard floor: below the minimum, there is not enough signal to trust a
+        # verdict, so the run fails regardless of any earlier degrade.
         warnings.append(
             f"only {len(completed)} advisor(s) completed (min {policy.min_completed_advisors})."
         )
-        status = RunStatus.FAILED if status != RunStatus.FAILED else status
-        if status != RunStatus.FAILED:
-            status = RunStatus.DEGRADED
+        status = RunStatus.FAILED
 
     if not chairman_ok and status == RunStatus.COMPLETED:
         status = RunStatus.DEGRADED
@@ -116,7 +116,7 @@ def run_council(
     config = config or load_runtime_config()
     registry = registry or config.registry()
     packs = packs if packs is not None else _load_all_packs(config)
-    run_id = uuid.uuid4().hex[:12]
+    run_id = uuid.uuid4().hex[:16]
 
     route: RouteDecision = Router().route(request, packs)
 
@@ -131,24 +131,44 @@ def run_council(
         return result, None
 
     architect_raw: Optional[str] = None
+    pack_version = ""
 
-    # Build the council spec (pack or dynamic).
-    if route.kind == "dynamic":
-        arch = architect or PersonaArchitect(_make_generate(registry, config.architect, request.cwd))
-        assignments = available_assignments(config, registry)
-        if not assignments:
-            raise BackendError("no ready backends in dynamic_pool for a dynamic council.")
-        chairman = _dynamic_chairman(config.chairman)
-        council = build_dynamic_council(
-            request, arch, chairman, assignments,
-            peer_review_backends={a.family: a.backend for a in assignments},
-            peer_review_pool={a.family: a.model for a in assignments},
+    def _not_built(error: object) -> Tuple[CouncilResult, None]:
+        return (
+            CouncilResult(
+                convened=False, route=route, council=None, grounding=None,
+                advisor_results=[], peer_reviews=[], verdict=None,
+                execution=ExecutionSummary(status=RunStatus.FAILED, stages=[]),
+                warnings=[f"could not build council: {error}"], run_id=run_id,
+            ),
+            None,
         )
-        architect_raw = getattr(arch, "_last_raw", None)
+
+    # Build the council spec (pack or dynamic). Any failure degrades to a
+    # non-convened result rather than crashing the caller.
+    if route.kind == "dynamic":
+        try:
+            arch = architect or PersonaArchitect(_make_generate(registry, config.architect, request.cwd))
+            assignments = available_assignments(config, registry)
+            if not assignments:
+                raise BackendError("no ready backends in dynamic_pool for a dynamic council.")
+            chairman = _dynamic_chairman(config.chairman)
+            council = build_dynamic_council(
+                request, arch, chairman, assignments,
+                peer_review_backends={a.family: a.backend for a in assignments},
+                peer_review_pool={a.family: a.model for a in assignments},
+            )
+            architect_raw = getattr(arch, "_last_raw", None)
+        except Exception as error:
+            return _not_built(error)
     else:
         pid = route.selected_pack or request.pack
-        pack = packs.get(pid) if pid in (packs or {}) else load_pack(pid or "", request.pack_path)
-        council = build_pack_council(pack, request)
+        try:
+            pack = packs.get(pid) if pid in (packs or {}) else load_pack(pid or "", request.pack_path)
+            council = build_pack_council(pack, request)
+            pack_version = pack.version
+        except Exception as error:  # bad mode/stakes/roster/pack -> graceful, not a crash
+            return _not_built(error)
 
     stages: List[StageOutcome] = []
     warnings: List[str] = []
@@ -161,14 +181,24 @@ def run_council(
             warnings=["council not convened (tier below threshold or empty roster)."],
             run_id=run_id,
         )
-        return result, RunManifest.from_result(result, seed=seed, architect_raw=architect_raw)
+        return result, RunManifest.from_result(
+            result, seed=seed, architect_raw=architect_raw, pack_version=pack_version
+        )
 
     meter = MeteringSink(pack=council.pack_id, stakes=council.stakes)
 
-    # Grounding
-    bundle = council.grounding.gather(GroundingRequest(brief=request.brief, cwd=request.cwd, args=request.grounding_args))
+    # Grounding — never let a provider failure crash the run.
+    from council_core.grounding import GroundingBundle
+
+    try:
+        bundle = council.grounding.gather(
+            GroundingRequest(brief=request.brief, cwd=request.cwd, args=request.grounding_args)
+        )
+        stages.append(StageOutcome("grounding", "completed", f"{len(bundle.items)} evidence item(s)"))
+    except Exception as error:
+        bundle = GroundingBundle(items=(), warnings=(f"grounding provider failed: {error}",))
+        stages.append(StageOutcome("grounding", "failed", str(error)))
     warnings.extend(bundle.warnings)
-    stages.append(StageOutcome("grounding", "completed", f"{len(bundle.items)} evidence item(s)"))
 
     # Credential pre-check (warn, don't hard-fail; failed personas are captured).
     for name in {p.backend for p in council.advisors} | {council.chairman.backend}:
@@ -238,7 +268,6 @@ def run_council(
         warnings=warnings, contract_violations=contract_violations, run_id=run_id,
     )
     manifest = RunManifest.from_result(
-        result, seed=seed, architect_raw=architect_raw,
-        pack_version=(council.pack_id if council.origin == "dynamic" else ""),
+        result, seed=seed, architect_raw=architect_raw, pack_version=pack_version,
     )
     return result, manifest

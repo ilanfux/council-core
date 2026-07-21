@@ -61,6 +61,16 @@ def test_dynamic_council(packs):
     assert manifest.architect_raw_output == raw
 
 
+def test_dynamic_no_backends_degrades_gracefully(packs, fake_registry):
+    from council_core.config_loader import RuntimeConfig
+
+    cfg = RuntimeConfig(backends={}, dynamic_pool=[], chairman={}, architect={})
+    req = CouncilRequest(brief="novel topic with no pool", dynamic=True)
+    result, manifest = run_council(req, config=cfg, registry=fake_registry, packs=packs)
+    assert not result.convened  # graceful, not a crash
+    assert any("could not build council" in w for w in result.warnings)
+
+
 def test_choice_required_not_convened(packs, fake_registry):
     req = CouncilRequest(brief="what wine pairs with fish")
     result, manifest = run_council(req, registry=fake_registry, packs=packs)
