@@ -64,11 +64,12 @@ class Router:
         second = scored[1] if len(scored) > 1 else None
 
         if not top or top.score < _MIN_ABS_SCORE:
+            reason = "no packs are available" if not packs else "no pack triggers matched the brief"
             return RouteDecision(
                 kind="choice_required",
                 candidates=scored,
                 confidence=0.0,
-                reason="no pack triggers matched the brief",
+                reason=reason,
             )
 
         second_score = second.score if second else 0

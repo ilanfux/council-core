@@ -65,7 +65,7 @@ class AgentOutcome:
 
     @property
     def ok(self) -> bool:
-        return self.status == "finished" and bool(self.text.strip())
+        return self.status == "finished" and bool((self.text or "").strip())
 
 
 @dataclass

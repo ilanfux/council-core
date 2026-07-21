@@ -5,9 +5,11 @@ Pipeline:  PersonaArchitect -> RoleDrafts -> deterministic normalize/repair
 
 The architect proposes *what expertise* is needed as constrained ``RoleDraft``s.
 It never emits a raw system prompt and never picks models/backends/retries. A
-trusted ``PersonaCompiler`` owns the final prompt structure, so a hostile brief
-can't inject instructions into an executable persona, and generated rosters stay
-comparable and promotable.
+trusted ``PersonaCompiler`` owns the final prompt structure and bounds every
+architect-supplied string (see ``compile_persona``), which limits — but does not
+eliminate — a hostile brief's influence. Because advisors have no tools or side
+effects and only feed the Chairman, the residual risk is a lower-quality
+persona, not an action taken. Generated rosters stay comparable and promotable.
 """
 
 from __future__ import annotations
@@ -202,7 +204,9 @@ def normalize_and_repair(
     # 4. order: mandatory first, then SMEs; trim SMEs to cap
     mandatory = [d for d in normalized if d.role_id in contract.required_advisor_roles]
     smes = [d for d in normalized if d.role_id not in contract.required_advisor_roles]
-    max_smes = contract.max_advisors - len(mandatory)
+    # Mandatory roles are non-negotiable; if the cap is smaller than the mandatory
+    # set, SMEs are simply squeezed to zero (never a negative slice).
+    max_smes = max(0, contract.max_advisors - len(mandatory))
     if len(smes) > max_smes:
         for extra in smes[max_smes:]:
             repairs.append(RosterRepair("trimmed_to_cap", f"dropped SME '{extra.role_id}' (cap {contract.max_total_personas})"))
@@ -222,18 +226,42 @@ class ModelAssignment:
     family: str
 
 
-def compile_persona(draft: RoleDraft, assignment: ModelAssignment) -> PersonaSpec:
-    """Turn a RoleDraft into an executable PersonaSpec with a TRUSTED prompt."""
+_MAX_FIELD_CHARS = 400
+_MAX_LIST_ITEMS = 8
 
-    lines: List[str] = [f"You are the {draft.title} on an advisory council."]
+
+def _clip(text: str) -> str:
+    t = " ".join(str(text).split())  # collapse whitespace/newlines the model may inject
+    return t[:_MAX_FIELD_CHARS]
+
+
+def _clip_list(items: List[str]) -> List[str]:
+    return [_clip(i) for i in items[:_MAX_LIST_ITEMS] if str(i).strip()]
+
+
+def compile_persona(draft: RoleDraft, assignment: ModelAssignment) -> PersonaSpec:
+    """Turn a RoleDraft into an executable PersonaSpec with a trusted prompt.
+
+    The compiler owns the prompt STRUCTURE and role: architect-supplied strings
+    are bounded (length + item count) and whitespace-collapsed so they read as
+    role description, not as free-form instruction blocks. This limits — it does
+    not eliminate — a hostile brief's influence; advisors have no tools/side
+    effects and their output only feeds the Chairman, so the residual risk is a
+    lower-quality persona, not an action taken.
+    """
+
+    lines: List[str] = [f"You are the {_clip(draft.title)} on an advisory council."]
     if draft.objective:
-        lines.append(f"\nYour objective: {draft.objective}")
-    if draft.focus_areas:
-        lines.append("Focus on: " + "; ".join(draft.focus_areas) + ".")
-    if draft.questions_to_answer:
-        lines.append("Answer specifically: " + " ".join(f"({i+1}) {q}" for i, q in enumerate(draft.questions_to_answer)))
-    if draft.evidence_requirements:
-        lines.append("Evidence rules: " + "; ".join(draft.evidence_requirements) + ".")
+        lines.append(f"\nYour objective: {_clip(draft.objective)}")
+    focus = _clip_list(draft.focus_areas)
+    if focus:
+        lines.append("Focus on: " + "; ".join(focus) + ".")
+    questions = _clip_list(draft.questions_to_answer)
+    if questions:
+        lines.append("Answer specifically: " + " ".join(f"({i+1}) {q}" for i, q in enumerate(questions)))
+    evidence = _clip_list(draft.evidence_requirements)
+    if evidence:
+        lines.append("Evidence rules: " + "; ".join(evidence) + ".")
     if draft.adversarial:
         lines.append("Be adversarial: do not optimize for agreement; hunt the weakness.")
     prompt = "\n".join(lines).strip()

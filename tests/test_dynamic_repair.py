@@ -30,6 +30,21 @@ def test_trim_to_cap():
     assert any(r.kind == "trimmed_to_cap" for r in repairs)
 
 
+def test_tiny_cap_keeps_mandatory_squeezes_smes_to_zero():
+    # cap smaller than the mandatory set must not produce a negative slice
+    contract = DynamicCouncilContract(max_total_personas=2)  # -> max 1 advisor
+    drafts = [RoleDraft(role_id="sme_a", title="A"), RoleDraft(role_id="sme_b", title="B")]
+    advisors, _ = normalize_and_repair(drafts, contract)
+    ids = [d.role_id for d in advisors]
+    assert set(ids) == {"risk_auditor", "fact_analyst"}  # mandatory kept, no SMEs, no crash
+
+
+def test_compile_bounds_hostile_fields():
+    draft = RoleDraft(role_id="x", title="X", objective="A" * 5000)
+    persona = compile_persona(draft, ModelAssignment("google", "m", "google"))
+    assert len(persona.prompt) < 1000  # field length was bounded
+
+
 def test_dedupe_and_drop_chairman():
     contract = DynamicCouncilContract()
     drafts = [

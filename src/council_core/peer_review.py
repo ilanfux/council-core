@@ -97,7 +97,15 @@ def run_peer_review(
 
     def _run_group(item):
         backend_name, tasks = item
-        return list(zip(tasks, registry.get(backend_name).run_batch(tasks, cwd=cwd)))
+        try:
+            outcomes = registry.get(backend_name).run_batch(tasks, cwd=cwd)
+        except Exception as error:  # bad backend name/construction -> fail those tasks only
+            outcomes = [
+                AgentOutcome(status="error", text="", error_message=f"backend '{backend_name}': {error}",
+                             actual_model=t.model)
+                for t in tasks
+            ]
+        return list(zip(tasks, outcomes))
 
     if tasks_by_backend:
         with ThreadPoolExecutor(max_workers=max(1, len(tasks_by_backend))) as pool:
