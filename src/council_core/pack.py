@@ -171,7 +171,25 @@ def _persona_from_dict(key: str, raw: dict, default_backend: str, default_model:
 def _read_yaml(path: Path) -> dict:
     if not path.is_file():
         raise PackError(f"expected file not found: {path}")
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as error:
+        raise PackError(f"malformed YAML in {path}: {error}") from error
+
+
+def _pack_file(pack_dir: Path, name: str) -> Path:
+    """Resolve a manifest-referenced file, keeping it inside the pack directory.
+
+    A pack manifest declares relative file names; containing them within the
+    pack dir prevents a stray ``..`` (typo or a malicious external pack) from
+    reaching arbitrary files, which matters once external packs are loaded.
+    """
+
+    base = pack_dir.resolve()
+    resolved = (base / name).resolve()
+    if base != resolved and base not in resolved.parents:
+        raise PackError(f"pack file '{name}' escapes the pack directory {base}")
+    return resolved
 
 
 def _resolve_pack_dir(name_or_path: str, pack_path: Optional[str] = None) -> Path:
@@ -207,7 +225,7 @@ def load_pack(name_or_path: str, pack_path: Optional[str] = None) -> PackDefinit
         raise PackError(f"invalid pack.yaml in {pack_dir}:\n{error}") from error
 
     # personas + tiers + modes
-    council_raw = _read_yaml(pack_dir / manifest.council.personas_file)
+    council_raw = _read_yaml(_pack_file(pack_dir, manifest.council.personas_file))
     default_backend = str(council_raw.get("default_backend", "cursor")).strip().lower()
     default_model = str(council_raw.get("default_model", "")).strip()
 
@@ -225,7 +243,7 @@ def load_pack(name_or_path: str, pack_path: Optional[str] = None) -> PackDefinit
     persona_modes: Dict[str, Set[str]] = {}
     for key, raw in (council_raw.get("personas") or {}).items():
         if not isinstance(raw, dict):
-            continue
+            raise PackError(f"{manifest.id}: persona '{key}' must be a mapping, got {type(raw).__name__}")
         persona = _persona_from_dict(key, raw, default_backend, default_model)
         personas[key] = persona
         modes = {str(m).strip() for m in (raw.get("modes") or [])} or set(declared_modes)
@@ -238,7 +256,7 @@ def load_pack(name_or_path: str, pack_path: Optional[str] = None) -> PackDefinit
     tiers = dict(_DEFAULT_TIERS)
     tiers_file = manifest.council.tiers_file
     if tiers_file:
-        tiers_raw = _read_yaml(pack_dir / tiers_file)
+        tiers_raw = _read_yaml(_pack_file(pack_dir, tiers_file))
         loaded: Dict[str, Tier] = {}
         for name, spec in (tiers_raw.get("tiers") or {}).items():
             spec = spec or {}
@@ -249,25 +267,34 @@ def load_pack(name_or_path: str, pack_path: Optional[str] = None) -> PackDefinit
                 peer_review=bool(spec.get("peer_review", False)),
                 description=str(spec.get("description", "")),
             )
-        if loaded:
-            tiers = loaded
+        if not loaded:
+            # The author declared a tiers file but it defined no tiers — surface
+            # the mismatch rather than silently using defaults.
+            raise PackError(f"{manifest.id}: tiers_file '{tiers_file}' defines no tiers")
+        tiers = loaded
 
     # prompts
-    prompt_dir = pack_dir / manifest.prompts.directory
+    prompt_dir = _pack_file(pack_dir, manifest.prompts.directory)
     prompt_set = PromptSet.load(prompt_dir if prompt_dir.is_dir() else None)
 
     # grounding
-    grounding = get_grounding(manifest.grounding.provider)
+    try:
+        grounding = get_grounding(manifest.grounding.provider)
+    except ValueError as error:
+        raise PackError(f"{manifest.id}: {error}") from error
 
     # output contract
-    if manifest.output.schema_file:
-        output_contract = load_contract_file(pack_dir / manifest.output.schema_file)
-    else:
-        output_contract = builtin_contract(manifest.output.schema_id or "generic_verdict_v1")
+    try:
+        if manifest.output.schema_file:
+            output_contract = load_contract_file(_pack_file(pack_dir, manifest.output.schema_file))
+        else:
+            output_contract = builtin_contract(manifest.output.schema_id or "generic_verdict_v1")
+    except ValueError as error:
+        raise PackError(f"{manifest.id}: {error}") from error
 
     # execution policy
     if manifest.execution.policy_file:
-        exec_raw = _read_yaml(pack_dir / manifest.execution.policy_file)
+        exec_raw = _read_yaml(_pack_file(pack_dir, manifest.execution.policy_file))
         execution_policy = ExecutionPolicy.from_dict(exec_raw)
     else:
         execution_policy = ExecutionPolicy()
@@ -275,7 +302,7 @@ def load_pack(name_or_path: str, pack_path: Optional[str] = None) -> PackDefinit
     # triggers
     triggers = list(manifest.routing.triggers)
     if manifest.routing.triggers_file:
-        trig_raw = _read_yaml(pack_dir / manifest.routing.triggers_file)
+        trig_raw = _read_yaml(_pack_file(pack_dir, manifest.routing.triggers_file))
         triggers.extend(str(t).strip().lower() for t in (trig_raw.get("triggers") or []))
 
     definition = PackDefinition(
@@ -320,6 +347,12 @@ def _validate(pack: PackDefinition) -> None:
     for mode in pack.modes:
         if not pack.personas_for_mode(mode):
             raise PackError(f"{pack.id}: mode '{mode}' has no personas")
+    # every dispatched agent must resolve a model (else a cryptic runtime failure)
+    if not pack.chairman.model:
+        raise PackError(f"{pack.id}: chairman has no model (set a model or default_model)")
+    for key, persona in pack.personas.items():
+        if not persona.model:
+            raise PackError(f"{pack.id}: persona '{key}' has no model (set a model or default_model)")
 
 
 def list_builtin_packs() -> List[str]:

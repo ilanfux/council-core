@@ -60,6 +60,10 @@ class GitRepoGrounding:
             diff_args.append(diff_scope)
         diff = _run_git(diff_args, cwd)
         if not diff or not diff.strip():
+            if diff_scope:
+                warnings.append(
+                    f"diff scope '{diff_scope}' produced no diff; fell back to staged/HEAD."
+                )
             # Fall back to staged, then last-commit, so a review always has context.
             diff = _run_git(["diff", "--cached", "--stat", "-p"], cwd) or _run_git(
                 ["show", "--stat", "-p", "HEAD"], cwd
