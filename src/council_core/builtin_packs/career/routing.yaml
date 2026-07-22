@@ -1,0 +1,23 @@
+# Router triggers for the Career pack (matched as substrings against the brief).
+triggers:
+  - career
+  - job offer
+  - promotion
+  - resume
+  - cv
+  - interview
+  - recruiter
+  - hiring manager
+  - negotiate
+  - negotiation
+  - raise
+  - manager
+  - role change
+  - switch jobs
+  - new job
+  - quit
+  - relocation
+  - job title
+  - linkedin
+  - offer letter
+  - counter offer

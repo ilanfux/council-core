@@ -1,0 +1,21 @@
+# Career stakes tiers (ported). The full roster + peer review runs at `thorough`
+# (a real application, a live interview, an offer).
+tiers:
+  trivial:
+    description: Trivial one-off question. The tool refuses to convene.
+    convene: false
+  quick:
+    description: Fast gut-check. Core roster (incl. the authenticity pass), no peer review.
+    convene: true
+    roster: core
+    peer_review: false
+  standard:
+    description: Everyday use. Core roster, full models, no peer review.
+    convene: true
+    roster: core
+    peer_review: false
+  thorough:
+    description: High-stakes (real application, live interview, offer). Full roster + peer review.
+    convene: true
+    roster: full
+    peer_review: true

@@ -33,9 +33,13 @@ Two ways a roster is chosen:
   source; used as a parity/characterization reference in Phase 0–2.
 - **Finance pack:** the six YAMLs in `C:\retirement_council` become the
   `finance` built-in pack. Left untouched at source.
-- **Career pack:** an older, simpler Career Council that worked like Dev
-  Council. **Location unconfirmed** — ported in Phase 6 if found, otherwise
-  written fresh against the stable pack schema.
+- **Career pack:** ported from the older, simpler Career Council at
+  `C:\Job_Search_2026\career-council-repo` (package `career-council-runner`, a
+  documented sibling of dev-council). Its 6 core lenses (Career Strategist,
+  Recruiter, Hiring Manager, Candidate Advocate, Skeptic→`risk_auditor`,
+  Ghostwriter Detector→`authenticity_auditor`) and 4 modes (strategy/resume/
+  interview/offer) are now `builtin_packs/career`, mapped onto free cross-family
+  backends. Left untouched at source.
 - **Not merged:** `C:\Second_Brain_Career_Council` (LangGraph + Neo4j +
   ingestion + MCP) is a different, stateful architecture and stays separate. It
   may later consume this core as a library.
@@ -509,7 +513,14 @@ advancing.**
 
 ## 14. Open items
 
-- Confirm the older simple **Career Council** location, or write it fresh (Ph 6).
+- **CLI name collision:** both `council-core` and the donor `dev-council-runner`
+  register the `console_scripts` name `council`. In this environment the
+  `council` script currently resolves to council-core while the donor is still
+  reachable via `python -m council`; a reinstall could flip the script. Resolve
+  before shipping — likely by uninstalling `dev-council-runner` once it is fully
+  absorbed as the `dev` pack, or renaming one entry point.
 - **Pydantic** adoption confirmed as boundary-only (§10) — revisit only if the
   run envelope's serialization needs push it inward.
 - Decide the **user pack directory** path convention (`~/.council/packs/`).
+- **Draft-only pack promotion** (`council pack draft-from-run`) — Phase 6's
+  remaining feature; not yet built.
