@@ -71,17 +71,24 @@ career←career-council-repo).
   - `dispatch.py`, `peer_review.py`, `chairman.py` (the unchanged core)
   - `backends/` (registry + `cursor`, `openai`, `anthropic`, `google`)
   - `result.py` (`CouncilResult` envelope) + `manifest.py` (Pydantic `RunManifest`)
-  - `orchestrator.py` (`run_council`), `format.py`, `cli.py`,
+  - `orchestrator.py` (`run_council`), `format.py` (markdown + `--json`), `cli.py`,
     `config_loader.py`, `metering.py`, `env.py`
-- **Packs** (`src/council_core/builtin_packs/`): `dev` (12 advisors, modes
-  review/plan, grounding git_repo), `finance` (6 advisors, mode advise, grounding
-  documents, CFO=Chairman, **fail-closed** on Fact/Risk), `career` (14 personas,
-  modes strategy/resume/interview/offer, 6 core lenses incl. Skeptic +
-  Ghostwriter authenticity pass, grounding documents).
-- **Tests**: 40 passing (`pytest`), all with fake backends — deterministic, no
-  network. Cover routing, roster selection, pack validation/failure paths,
-  dynamic repair (incl. tiny-cap + hostile-field bounding), grounding, output
-  contracts, and the orchestrator wiring.
+  - `sdk_client.py` (real Cursor SDK client), `model_resolve.py` (Cursor→provider→UI
+    cascade), `router_classifier.py` (opt-in LLM router), `pack_promote.py`
+    (`draft-from-run`), `skill_install.py` (skill install command)
+- **Packs** (`src/council_core/builtin_packs/`) — **6 total**: `dev` (12 advisors,
+  modes review/plan, grounding git_repo), `finance` (6 advisors, mode advise,
+  grounding documents, CFO=Chairman, **fail-closed** on Fact/Risk), `career` (14
+  personas, modes strategy/resume/interview/offer, 6 core lenses incl. Skeptic +
+  Ghostwriter authenticity pass, grounding documents), plus **`dev_cursor` /
+  `finance_cursor` / `career_cursor`** — the same rosters mapped onto `backend:
+  cursor` so one `CURSOR_API_KEY` runs GPT/Codex + Claude + Gemini + Composer as
+  grounded agents.
+- **Tests**: **79 passing, 1 skipped** (`pytest`), all with fake backends —
+  deterministic, no network. The 1 skip is a live-Cursor integration test
+  (`--run-integration`). Cover routing, roster selection, pack validation/failure
+  paths, dynamic repair, grounding, output contracts, orchestrator wiring, the
+  Cursor model-resolution cascade, `--json`, skill install, and promotion.
 - **Reviewed**: the old dev-council was run as an external reviewer in a loop
   (rounds A/B/C + a verification pass). Every real bug was fixed; security
   findings inapplicable to a local single-user CLI were discarded with rationale.
@@ -112,163 +119,117 @@ council run --dynamic --brief "How should we price carbon credits for a startup?
 
 ---
 
-## 3. What is MISSING / not yet built
+## 3. Status — recently built, and what remains
 
-Ordered roughly by importance for "make it a real product."
+The initial handoff listed the items below as "missing." **All the core ones are
+now built, reviewed, and fixed** (Cursor SDK enablement + product backlog). Tests:
+79 passing, 1 integration skip.
 
-1. **Skill wrapper** — nothing yet makes the council invokable as an assistant
-   *skill*. This is section 4.
-2. **Cursor SDK multi-model (grounded)** — the Cursor backend is a **stub**; the
-   council currently only runs *provider* backends (plain chat + injected
-   context). This is section 5.
-3. **LLM router classifier** — `router.py` does deterministic trigger scoring
-   only. The optional LLM classifier for ambiguous briefs is a `generate` hook
-   that is never wired. Ambiguity currently → `choice_required`.
-4. **Draft-only pack promotion** — `council pack draft-from-run <run-id>` (turn a
-   good dynamic roster into a reviewable draft pack) is designed in PLAN.md
-   Phase 6 but not built.
-5. **Document grounding is text-only** — `grounding/documents.py` reads
-   `.txt/.md/.csv/.json/.yaml`. No PDF/docx parsing (user must export to text).
-6. **Per-pack model diversity resolution** — packs hardcode a model+family+backend
-   per persona. There is no runtime "resolve models against what's available +
-   enforce cross-family diversity" step like PLAN.md `model_routing` envisions.
-   (Dynamic councils DO spread families via `assign_models`.)
-7. **`council usage` / budget command** — metering writes `~/.council/usage.jsonl`
-   but there is no summary/budget-ceiling CLI (donor had one).
-8. **CLI name collision** — both `council-core` and `dev-council-runner` register
-   the `council` script. Right now `council` = council-core and the donor is
-   reachable via `python -m council`; a reinstall could flip it. Fix by
-   uninstalling the donor once it's fully absorbed as the `dev` pack, or rename
-   an entry point.
-9. **Confidence signals** — intentionally omitted in v1 (see PLAN.md §7). If ever
-   added, expose component signals, not a single LLM float.
+**DONE (was missing):**
+- **Cursor SDK multi-model (grounded)** — the stub is replaced with a real client;
+  a diverse grounded council runs from one `CURSOR_API_KEY`. See §5.
+- **Skill wrapper** — canonical `SKILL.md` + `council skill install`. See §4.
+- **LLM router classifier** — built but **opt-in** (`router.use_classifier: false`
+  by default; deterministic scoring otherwise).
+- **Draft-only pack promotion** — `council pack draft-from-run` / `pack validate`
+  (`pack_promote.py`); produces a draft for human review, never auto-installs.
+- **PDF/docx grounding** — `grounding/documents.py` (extras `council-core[docs]`:
+  pypdf + python-docx).
+- **`council usage`** — metering summary + soft budget ceiling.
+- **Cursor model resolution + param validation** — `model_resolve.py` (§5 cascade).
 
----
-
-## 4. MISSING PIECE A — make the council work as a "skill that calls different models"
-
-### What "skill" means here
-
-The donor councils are triggered by a **skill file** (`SKILL.md`) that lives in
-an assistant's skill directory (e.g. Cursor: `~/.cursor/skills/<name>/SKILL.md`;
-Claude Code: a skill under the plugin/skills path). The skill is the *brain* that:
-
-1. Recognizes the user's intent ("review my resume", "should I take this offer").
-2. **Gathers the materials** into a brief (and, for document/grounded packs,
-   collects file paths).
-3. **Shells out to the CLI** — `council run --pack … --brief … --ground …`.
-4. Presents the returned verdict markdown to the user.
-
-The engine already exposes exactly the surface a skill needs (a CLI that takes a
-brief + pack + grounding args and returns markdown + an optional JSON manifest).
-**What's missing is the skill file(s) and the glue.**
-
-### What to build
-
-1. **A `SKILL.md`** (one per target assistant, or one generic). It should:
-   - Describe *when* to trigger (keywords: career/offer/resume, finance/pension/
-     tax, code review/plan, or "convene a council on …").
-   - Instruct the assistant to build a brief and detect the right `--pack` and
-     `--mode`, or pass `--dynamic` for novel topics. (It can let the engine route
-     by omitting `--pack`, and handle a `choice_required` result by asking.)
-   - For grounded/document packs, instruct it to collect file paths and pass
-     `--ground "documents=label::path"` (finance/career) or run from the repo dir
-     for `dev`.
-   - Call the CLI and render the markdown verdict; optionally save the manifest.
-2. **A stable, machine-friendly CLI contract.** Add `--json` output (return the
-   `CouncilResult`/manifest as JSON) so a skill can parse status/warnings, not
-   just scrape markdown. Today `--manifest <path>` writes JSON; a `--json`
-   stdout mode would be cleaner for skills.
-3. **Non-interactive routing already works**: `run_council` returns
-   `choice_required` without prompting; the CLI asks only on a TTY, else exits 2
-   with guidance. A skill should pass `--pack`/`--dynamic` explicitly (it knows
-   the intent) to avoid the ambiguity round-trip.
-4. **Install/registration doc**: where the skill file goes for Cursor vs Claude
-   Code, and that `council` must be on `PATH` (it is, via the console script).
-
-**"Calls different models" is already true** at the pack level: each persona in a
-pack declares its own `backend`+`model`+`family`, dispatch groups by backend and
-runs them concurrently, and peer review picks a cross-family reviewer. The skill
-doesn't choose models — it chooses the *pack/mode/brief*; the pack chooses the
-models. So the skill layer is purely orchestration glue around the existing CLI.
-
-### Fast path
-
-The donor repos already contain working `SKILL.md` files (dev-council ships one;
-career-council-repo's `GUIDE.md` references `~/.cursor/skills/career-council/
-SKILL.md`). **Port one of those**, changing the invoked command to
-`council run --pack <id> …`. That is the shortest route to a working skill.
+**Still open / intentional:**
+1. **CLI name collision** — `council-core` and donor `dev-council-runner` both
+   register `council`. Currently `council` = council-core; donor via
+   `python -m council`. Resolve by uninstalling the donor once it's fully absorbed
+   as the `dev` pack.
+2. **Confidence signals** — intentionally omitted (PLAN.md §7); if added, expose
+   component signals, not a single LLM float.
+3. **General cross-provider diversity policy** (PLAN.md `model_routing`, Phase 8) —
+   deferred. The Cursor cascade covers multi-model-from-one-key; a runtime
+   "resolve provider packs against what's available + enforce cross-family
+   diversity" step is still unbuilt (provider packs hardcode model/family/backend).
+4. **Two minor review notes** (neither blocking): a now-unused `provider_pool`
+   param in `model_resolve._resolve_ui_model` (cosmetic); and the live Cursor
+   smoke run is only verifiable with a real `CURSOR_API_KEY` (reported working:
+   `dev_cursor` → 4/4 advisors on Cursor).
 
 ---
 
-## 5. MISSING PIECE B — Cursor SDK for grounded multi-model
+## 4. Feature A — the council as a "skill" (BUILT)
+
+A skill is a `SKILL.md` the assistant (Cursor / Claude Code) reads to know *when*
+to convene a council, how to build the brief, which pack/mode to pick, and to
+shell out to the `council` CLI and render the verdict.
+
+**How it works now:**
+- **Canonical source:** `src/council_core/skills/council/SKILL.md` (single file,
+  shipped as package data — do not re-duplicate it).
+- **Install:** `council skill install` copies it into `~/.cursor/skills/council/`
+  and/or `~/.claude/skills/council/` (and a `--project` variant writes into the
+  repo's `.cursor`/`.claude`). Those host copies are *targets*, generated on
+  demand — never edited or committed.
+- **Machine-readable output:** `council run --json` returns the `CouncilResult`
+  (route, model assignments, cascade tier, status, warnings, verdict, per-advisor
+  results, and the rendered markdown) so a skill parses structured data instead of
+  scraping text. `--manifest <path>` still writes the full `RunManifest`.
+- **Routing:** the skill passes `--pack`/`--mode` (or `--dynamic`) explicitly when
+  it knows intent; a `choice_required` result is the CLI's to resolve (asks on a
+  TTY, exits 2 non-interactively).
+
+**"Calls different models" is intrinsic:** each persona declares its own
+`backend`+`model`+`family`; dispatch groups by backend and runs them concurrently;
+peer review picks a cross-family reviewer. The skill picks the *pack/mode/brief* —
+the pack (and, for Cursor, the resolution cascade in §5) picks the models.
+
+---
+
+## 5. Feature B — Cursor SDK grounded multi-model (BUILT)
 
 ### Why Cursor matters
 
-Provider backends (openai/anthropic/google + the free gateways) are **plain chat
-calls**: they cannot browse the repo, so `dispatch.py` injects a bounded
-grounding snapshot into their prompt. The **Cursor SDK backend is different and
-better for code**: each persona runs as a **grounded local agent** that can
-Read/Grep/Glob the real repository and cite `file:line`. Crucially, Cursor gives
-you **multiple model families through one key** (GPT/Codex + Claude + Gemini +
-Composer), so a fully diverse council needs only a single `CURSOR_API_KEY`.
+Provider backends (openai/anthropic/google + free gateways) are **plain chat
+calls**: they can't browse the repo, so `dispatch.py` injects a bounded grounding
+snapshot. The **Cursor SDK backend runs each persona as a grounded local agent**
+that reads the real repo and cites `file:line`, and it exposes **multiple model
+families from one key** (GPT/Codex + Claude + Gemini + Composer). So a fully
+diverse grounded council needs only a single `CURSOR_API_KEY`.
 
-### Current state
+### What's built
 
-`council_core/backends/cursor.py` exists and is registered, but
-`council_core/sdk_client.py` is a **stub**: `run_agents_batch` and
-`discover_models` raise `SdkUnavailableError`. So selecting `backend: cursor`
-today does not actually run.
+- **`sdk_client.py`** — real client ported from the donor. Preserves the critical
+  gotcha: it drives the SDK's **async** API and sets
+  `asyncio.WindowsProactorEventLoopPolicy()` on Windows (the sync bridge fails on
+  pipes with `WinError 10038`). Provides `run_agents_batch` (one async bridge +
+  `asyncio.gather`, order-preserving, `startup_error` vs run `error`),
+  `build_model_selection` (id string or `{id, params:[{id,value}]}`), and
+  `discover_models → (ids, param_catalog)`.
+- **`model_resolve.py`** — a resolution **cascade**, gated by `cursor_needed_for`
+  so pure-provider packs never touch Cursor:
+  - **A · Cursor:** validate each cursor model id against the live catalog (fall
+    back unusable ids to `default_model`, never invent a slug); drop
+    family-specific params a model doesn't support.
+  - **B · providers:** if Cursor is unusable, remap cursor personas onto ready
+    `dynamic_pool` provider assignments (round-robin for family spread).
+  - **C · UI model:** last resort — force the skill's `--ui-model` /
+    `COUNCIL_UI_MODEL` (never implicitly `cursor`).
+  - The chosen tier is reported as `result.cascade_tier` + `model_assignments`.
+- **`--require-cursor` / `request.require_cursor`** — when set, a Cursor-needed
+  roster that can't reach Cursor returns a **non-convened, `FAILED`** result with
+  a clear "set CURSOR_API_KEY" message instead of silently downgrading. Without
+  the flag, a downgrade to providers/UI prints a prominent banner in the verdict.
+- **`dev_cursor` / `finance_cursor` / `career_cursor` packs** — the three rosters
+  on `backend: cursor` with real Cursor model ids (`gpt-5.x`, `claude-*`,
+  `gemini-*`, `composer-2.5`).
+- **`council models`** — lists usable Cursor ids and per-persona resolution.
 
-### What's required to make it work
+### To run it
 
-The donor has a complete, battle-tested implementation at
-`C:\dev-council\src\council\sdk_client.py` (270 lines). **Port it**, rebasing
-imports `council.*` → `council_core.*`. Key things it handles that you must
-preserve:
-
-1. **Async + Windows Proactor loop (critical).** The SDK's *sync* bridge uses
-   `select.select()` on subprocess pipes, which fails on Windows
-   (`WinError 10038`). You **must** drive the *async* API and, on Windows, set
-   `asyncio.WindowsProactorEventLoopPolicy()` before `asyncio.run()`. This is the
-   single biggest gotcha — the donor's `_run_async()` does exactly this.
-2. **`run_agents_batch(tasks, cwd, api_key)`** — launch one `AsyncClient` bridge,
-   `asyncio.gather` the agents (`AsyncAgent.prompt(...)` with
-   `AgentOptions(api_key, model, local=LocalAgentOptions(cwd=cwd))`), preserve
-   task order, and normalize results into `AgentOutcome` (distinguish
-   `startup_error` vs run `error`; one failure never sinks the batch).
-3. **`build_model_selection(model_id, params)`** — a plain id string, or a
-   `ModelSelection` dict when params are set (GPT/Codex `reasoning`; Claude
-   `effort`/`thinking`; Gemini none).
-4. **`discover_models(api_key) → (available_ids, param_catalog)`** — call
-   `client.list_models(...)` once; extract model ids and each model's supported
-   params/values. This powers two engine features the provider path skips:
-   - **`resolve_models`**: fall back any configured Cursor model id the account
-     can't use to a safe default (never invent a slug).
-     — *Not yet ported into council_core; add it to `pack.py`/`config_loader.py`.*
-   - **param validation**: drop a family-specific param a model doesn't support
-     (e.g. Claude `effort` on a GPT model) with a warning instead of failing.
-5. **Dependencies**: `pip install cursor-sdk` and set `CURSOR_API_KEY`. The
-   backend's `grounded = True` flag already tells `dispatch.py` to NOT inject
-   context (the agent reads the repo itself) — that path is implemented and
-   tested; only the SDK client underneath is stubbed.
-
-### Concrete steps to enable Cursor multi-model
-
-1. Replace `council_core/sdk_client.py` with the donor's implementation (rebased
-   imports). Keep the `SdkUnavailableError` subclass of `BackendError`.
-2. Port the donor's model-resolution logic (`resolve_models`,
-   `validate_model_params` from `C:\dev-council\src\council\config_loader.py`)
-   into council_core, and call it in `orchestrator.run_council` **only when a
-   selected persona/chairman uses `backend: cursor`** (mirror the donor's
-   `_cursor_needed_for` gate so a pure-provider pack never needs a Cursor key).
-3. Add a `dev`-pack variant (or user override) whose personas use
-   `backend: cursor` with Cursor model ids (`gpt-5.x`, `claude-*`,
-   `gemini-*`, `composer-*`) so a diverse grounded council runs from one key.
-4. Add a `council models` subcommand (port from donor) to list usable Cursor
-   models and show per-persona resolution — useful for debugging assignments.
-5. Test: because it needs a live key + network, gate it behind an integration
-   marker; keep the deterministic suite fake-backed as-is.
+`pip install 'council-core[cursor]'` and set `CURSOR_API_KEY`, then e.g.
+`council run --pack dev_cursor --mode review --cwd <repo> --require-cursor
+--brief "…"`. The live path is covered by an integration-marked test (skipped
+unless `--run-integration` + a key). Reported working: `dev_cursor` → 4/4
+advisors on Cursor, `finance` still runs with no Cursor key (cascade `unchanged`).
 
 ---
 
