@@ -9,7 +9,16 @@ from council_core.pack import list_builtin_packs, load_pack
 
 @pytest.mark.parametrize(
     "pid",
-    ["dev", "dev_cursor", "finance", "finance_cursor", "career", "career_cursor"],
+    [
+        "dev",
+        "dev_cursor",
+        "finance",
+        "finance_cursor",
+        "career",
+        "career_cursor",
+        "travel",
+        "travel_cursor",
+    ],
 )
 def test_pack_loads(pid):
     pack = load_pack(pid)
@@ -32,6 +41,8 @@ def test_builtins_discovered():
         "finance_cursor",
         "career",
         "career_cursor",
+        "travel",
+        "travel_cursor",
     }
 
 

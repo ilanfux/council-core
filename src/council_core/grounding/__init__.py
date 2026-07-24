@@ -10,6 +10,10 @@ from council_core.grounding.documents import DocumentGrounding
 from council_core.grounding.git_repo import GitRepoGrounding
 from council_core.grounding.null import NullGrounding
 from council_core.grounding.protocol import Grounding
+from council_core.grounding.visibility import (
+    format_invisible_docs_banner,
+    invisible_document_locations,
+)
 
 _PROVIDERS = {
     "git_repo": GitRepoGrounding,
@@ -40,5 +44,6 @@ __all__ = [
     "NullGrounding",
     "get_grounding",
     "estimate_tokens",
-    "get_grounding",
+    "invisible_document_locations",
+    "format_invisible_docs_banner",
 ]

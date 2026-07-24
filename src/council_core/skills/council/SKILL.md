@@ -36,6 +36,7 @@ The pack chooses models; you choose pack / mode / brief / grounding.
 | Interview prep | same career pack | `--mode interview` |
 | Offer decision | same career pack | `--mode offer` |
 | Pension / tax / withdrawal / budget | `finance_cursor` if Cursor key ready, else `finance` | documents via `--ground` |
+| Multi-day driving / food / family trip | `travel` (primary); `travel_cursor` optional | documents via `--ground`; modes `plan`/`food`/`route` |
 | Novel / uncategorizable topic | `--dynamic` | no pack |
 
 Always pass `--pack` or `--dynamic` explicitly (skills know intent — avoid
@@ -47,9 +48,14 @@ Always pass `--pack` or `--dynamic` explicitly (skills know intent — avoid
 2. **Pick pack + mode** from the table above.
 3. **Grounding**
    - `dev` / `dev_cursor`: run with `--cwd` set to the repo root (git grounding).
-   - `finance` / `career`: collect text docs and pass
+   - `finance` / `career` / `travel`: collect text docs and pass
      `--ground "documents=label::C:\path\to\file.txt"` (repeatable). PDF/docx
      must be exported to text for now.
+   - `*_cursor` **document** packs (`finance_cursor`, `career_cursor`,
+     `travel_cursor`): put those files under `--cwd` (or point `--cwd` at the
+     docs folder). Grounded Cursor agents are not injected the documents
+     bundle — they only browse `--cwd`. The CLI prints a loud banner if a
+     document path sits outside cwd while Cursor backends remain convened.
 4. **UI fallback model**: if you know your own model id, add
    `--ui-model <id>`. Prefer Cursor backend for that fallback
    (`--ui-backend cursor`) when a Cursor key exists.

@@ -1,0 +1,23 @@
+schema_version: 1
+id: travel
+version: 1.0.0
+display_name: Travel & Tourism Council
+
+routing:
+  triggers_file: routing.yaml
+
+council:
+  personas_file: personas.yaml
+  tiers_file: tiers.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: documents
+
+output:
+  schema_file: output_contract.yaml
+
+execution:
+  policy_file: execution.yaml

@@ -47,3 +47,5 @@ class CouncilResult:
     run_id: str = ""
     model_assignments: List[PersonaAssignment] = field(default_factory=list)
     cascade_tier: str = ""
+    # Document paths outside --cwd while a grounded backend is still convened.
+    unreachable_grounding_docs: List[str] = field(default_factory=list)

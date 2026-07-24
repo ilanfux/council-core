@@ -1,0 +1,19 @@
+tiers:
+  trivial:
+    description: Trivial one-off question. The tool refuses to convene.
+    convene: false
+  quick:
+    description: Fast gut-check. Core roster, no peer review.
+    convene: true
+    roster: core
+    peer_review: false
+  standard:
+    description: Everyday use. Core roster, full models, no peer review.
+    convene: true
+    roster: core
+    peer_review: false
+  thorough:
+    description: High-stakes multi-day plan. Full roster (incl. specialists) + peer review.
+    convene: true
+    roster: full
+    peer_review: true

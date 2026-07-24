@@ -1,0 +1,17 @@
+# Router triggers for the Travel pack (matched as substrings against the brief).
+triggers:
+  - travel
+  - trip
+  - itinerary
+  - road trip
+  - driving tour
+  - multi-day
+  - vacation
+  - holiday
+  - tourism
+  - restaurant reservation
+  - family trip
+  - border crossing
+  - road itinerary
+  - culinary trip
+  - food itinerary

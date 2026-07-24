@@ -1,0 +1,31 @@
+schema_version: 1
+id: travel_cursor
+version: 1.0.0
+display_name: Travel & Tourism Council (Cursor SDK)
+
+# Opt-in: do not compete with free-provider `travel` on routing.
+# Primary day-to-day pack is `travel` (provider). This variant is for the
+# two-pack convention / cross-family diversity — there is no repo to ground on.
+# Document packs + Cursor: put grounding files under --cwd (or point --cwd at
+# the docs folder); otherwise a loud banner warns that agents cannot see them.
+routing:
+  triggers:
+    - cursor travel
+    - travel cursor
+    - grounded travel council
+
+council:
+  personas_file: personas.yaml
+  tiers_file: tiers.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: documents
+
+output:
+  schema_file: output_contract.yaml
+
+execution:
+  policy_file: execution.yaml

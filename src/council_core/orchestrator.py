@@ -253,6 +253,16 @@ def run_council(
         stages.append(StageOutcome("grounding", "failed", str(error)))
     warnings.extend(bundle.warnings)
 
+    # (a′) Loud when documents sit outside --cwd but grounded backends remain
+    # after cascade (they do not get the bundle injected). Cascade-to-provider
+    # runs inject the bundle and must not warn. Stored on the result field only
+    # — format.py renders it as a top banner (do not also append to warnings).
+    from council_core.grounding.visibility import invisible_document_locations
+
+    unreachable_docs = invisible_document_locations(
+        bundle=bundle, cwd=request.cwd, council=council, registry=registry
+    )
+
     # Credential pre-check (warn, don't hard-fail; failed personas are captured).
     for name in {p.backend for p in council.advisors} | {council.chairman.backend}:
         try:
@@ -320,6 +330,7 @@ def run_council(
         execution=ExecutionSummary(status=status, stages=stages),
         warnings=warnings, contract_violations=contract_violations, run_id=run_id,
         model_assignments=resolution.assignments, cascade_tier=resolution.tier,
+        unreachable_grounding_docs=list(unreachable_docs),
     )
     manifest = RunManifest.from_result(
         result, seed=seed, architect_raw=architect_raw, pack_version=pack_version,

@@ -96,6 +96,6 @@ def test_manifest_file_escape_rejected(tmp_path: Path):
         load_pack(str(tmp_path))
 
 
-@pytest.mark.parametrize("pid", ["dev", "finance", "career"])
+@pytest.mark.parametrize("pid", ["dev", "finance", "career", "travel", "travel_cursor"])
 def test_builtin_packs_still_valid(pid):
     load_pack(pid)  # must not raise after all the new validation

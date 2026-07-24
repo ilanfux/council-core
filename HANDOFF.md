@@ -76,19 +76,25 @@ career←career-council-repo).
   - `sdk_client.py` (real Cursor SDK client), `model_resolve.py` (Cursor→provider→UI
     cascade), `router_classifier.py` (opt-in LLM router), `pack_promote.py`
     (`draft-from-run`), `skill_install.py` (skill install command)
-- **Packs** (`src/council_core/builtin_packs/`) — **6 total**: `dev` (12 advisors,
+- **Packs** (`src/council_core/builtin_packs/`) — **8 total**: `dev` (12 advisors,
   modes review/plan, grounding git_repo), `finance` (6 advisors, mode advise,
   grounding documents, CFO=Chairman, **fail-closed** on Fact/Risk), `career` (14
   personas, modes strategy/resume/interview/offer, 6 core lenses incl. Skeptic +
-  Ghostwriter authenticity pass, grounding documents), plus **`dev_cursor` /
-  `finance_cursor` / `career_cursor`** — the same rosters mapped onto `backend:
-  cursor` so one `CURSOR_API_KEY` runs GPT/Codex + Claude + Gemini + Composer as
-  grounded agents.
-- **Tests**: **79 passing, 1 skipped** (`pytest`), all with fake backends —
+  Ghostwriter authenticity pass, grounding documents), `travel` (7 advisors,
+  modes plan/food/route, documents grounding, Travel Director chairman,
+  **degrade_with_warning** on Fact/Risk, `travel_verdict_v1`), plus
+  **`dev_cursor` / `finance_cursor` / `career_cursor` / `travel_cursor`** — the
+  same rosters mapped onto `backend: cursor` so one `CURSOR_API_KEY` runs
+  GPT/Codex + Claude + Gemini + Composer as grounded agents. For document
+  `*_cursor` packs, put `--ground` files under `--cwd` (loud banner if not);
+  feeding resolved doc paths to Cursor agents is a known follow-up for all three
+  document cursor packs.
+- **Tests**: **92 passing, 1 skipped** (`pytest`), all with fake backends —
   deterministic, no network. The 1 skip is a live-Cursor integration test
   (`--run-integration`). Cover routing, roster selection, pack validation/failure
-  paths, dynamic repair, grounding, output contracts, orchestrator wiring, the
-  Cursor model-resolution cascade, `--json`, skill install, and promotion.
+  paths, dynamic repair, grounding (incl. loud docs-outside-cwd banner for
+  grounded backends), output contracts, orchestrator wiring, the Cursor
+  model-resolution cascade, `--json`, skill install, and promotion.
 - **Reviewed**: the old dev-council was run as an external reviewer in a loop
   (rounds A/B/C + a verification pass). Every real bug was fixed; security
   findings inapplicable to a local single-user CLI were discarded with rationale.
@@ -218,9 +224,10 @@ diverse grounded council needs only a single `CURSOR_API_KEY`.
   roster that can't reach Cursor returns a **non-convened, `FAILED`** result with
   a clear "set CURSOR_API_KEY" message instead of silently downgrading. Without
   the flag, a downgrade to providers/UI prints a prominent banner in the verdict.
-- **`dev_cursor` / `finance_cursor` / `career_cursor` packs** — the three rosters
-  on `backend: cursor` with real Cursor model ids (`gpt-5.x`, `claude-*`,
-  `gemini-*`, `composer-2.5`).
+- **`dev_cursor` / `finance_cursor` / `career_cursor` / `travel_cursor` packs** —
+  the domain rosters on `backend: cursor` with real Cursor model ids (`gpt-5.x`,
+  `claude-*`, `gemini-*`, `composer-2.5`). Document packs still need docs under
+  `--cwd` until a follow-up feeds resolved document paths to grounded agents.
 - **`council models`** — lists usable Cursor ids and per-persona resolution.
 
 ### To run it

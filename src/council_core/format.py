@@ -44,6 +44,10 @@ def render_markdown(result: CouncilResult) -> str:
         parts.append(
             "> WARNING: Cursor unavailable — ran on UI fallback model (grounding lost)"
         )
+    if result.unreachable_grounding_docs:
+        from council_core.grounding.visibility import format_invisible_docs_banner
+
+        parts.append("> " + format_invisible_docs_banner(result.unreachable_grounding_docs))
     if council.skipped:
         parts.append(f"_Skipped: {', '.join(council.skipped)}_")
 
@@ -148,6 +152,7 @@ def result_to_dict(result: CouncilResult) -> Dict[str, Any]:
             ],
         },
         "warnings": list(result.warnings),
+        "unreachable_grounding_docs": list(result.unreachable_grounding_docs),
         "contract_violations": list(result.contract_violations),
         "verdict": (
             {

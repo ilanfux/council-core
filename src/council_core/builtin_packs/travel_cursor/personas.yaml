@@ -1,0 +1,156 @@
+# travel_cursor: Cursor SDK multi-model variant.
+# Every persona uses backend: cursor so one CURSOR_API_KEY runs diverse families.
+# Opt-in pack — invoke with --pack travel_cursor. Model ids validated at runtime.
+# Primary day-to-day pack remains free-provider `travel` (no repo to ground on).
+
+default_backend: cursor
+default_model: gpt-5.5
+modes:
+- plan
+- food
+- route
+peer_review_backend: cursor
+peer_review_backends:
+  openai: cursor
+  anthropic: cursor
+  google: cursor
+  cursor: cursor
+peer_review_pool:
+  openai: gpt-5.4
+  anthropic: claude-sonnet-4-6
+  google: gemini-3.1-pro
+  cursor: composer-2.5
+chairman:
+  title: Travel Director
+  backend: cursor
+  model: gpt-5.5
+  family: openai
+  prompt: >-
+    You are the Travel Director and Chairman of the Travel & Tourism Council.
+    Turn the advisors' analyses and the peer reviews into one decisive multi-day
+    plan: route + meals + family pacing + bookings/risks. Preserve genuine
+    disagreement rather than manufacturing consensus. End with a concrete
+    day-by-day skeleton, a book-now list, and next actions. The travelers make
+    the final decision.
+  model_params:
+    reasoning: high
+personas:
+  itinerary_architect:
+    title: Itinerary Architect
+    core: true
+    capability: heavy
+    backend: cursor
+    model: gpt-5.5
+    family: openai
+    prompt: 'Multi-day driving logistics only: overnight hubs, ordered legs, realistic
+      drive times (especially rural roads), and buffers for traffic and fatigue.
+      Specialize in multi-country corridors, border crossings (docs, hours, queues),
+      and the discipline of not stacking three peak experiences in one afternoon.
+      Propose pacing and overnight placement; defer food authenticity and teen/kid
+      engagement to their specialists. Do not invent distances or open hours —
+      flag what Fact Analyst must verify.'
+    model_params:
+      reasoning: high
+  gastronomy_guide:
+    title: Local Gastronomy Guide
+    core: true
+    capability: heavy
+    backend: cursor
+    model: claude-sonnet-4-6
+    family: anthropic
+    prompt: 'Authentic culinary plan for the corridor: balance scarce high-end advance
+      reservations with excellent local breakfast/brunch spots and strong casual
+      meat-focused diners. Prefer neighborhood places over tourist traps; note dietary
+      constraints from the brief/docs; say when to book vs walk-in. Restaurant booking
+      strategy is yours; non-food timed-entry/tickets belong to Reservation & Access.
+      Coordinate meal anchors with drive legs without rewriting the whole route.'
+    model_params:
+      thinking: 'true'
+      effort: high
+  family_specialist:
+    title: Family Travel Specialist
+    core: true
+    capability: medium
+    backend: cursor
+    model: gemini-3.1-pro
+    family: google
+    prompt: 'Family of 5 (teens + younger kids): activity mix, energy windows, shared
+      vs optional split time, and downtime that still feels like a trip. Own teen
+      buy-in inside this lens — culturally relevant hooks (local cinema history, film
+      locations, optional side quests) so older teens are engaged without a forced
+      family-tour feel — while protecting younger kids'' stamina. Do not invent a
+      separate teen itinerary that breaks the driving spine.'
+  risk_auditor:
+    title: Risk & Budget Assessor
+    role_id: risk_auditor
+    core: true
+    capability: heavy
+    backend: cursor
+    model: gpt-5.4
+    family: openai
+    prompt: Independent adversarial feasibility check. Test booking windows, cancellation/irreversibility,
+      overpacked days, weather/season, parking and entry constraints, border/docs
+      risk, and budget realism. Do not optimize for optimism. End with Stop / Proceed
+      / Proceed-after-verify, naming exactly what must be confirmed. Preserve dissent
+      even if the Director chooses differently.
+  fact_analyst:
+    title: Ground-Truth Logistics Analyst
+    role_id: fact_analyst
+    core: true
+    capability: medium
+    backend: cursor
+    model: composer-2.5
+    family: cursor
+    prompt: 'Evidence ledger only: distances, drive-time assumptions, open hours,
+      transfer times, booking rules, border requirements, and what is confirmed vs
+      assumed from the brief and documents. Label each line (verified_fact / assumption
+      / open_question). No romantic itinerary prose. End with the smallest missing-information
+      list that blocks a reliable day-by-day plan. You do not make the final recommendation.'
+  reservation_ops:
+    title: Reservation & Access Operator
+    core: false
+    modes:
+    - plan
+    - food
+    - route
+    capability: medium
+    backend: cursor
+    model: claude-opus-4-8
+    family: anthropic
+    triggers:
+    - ticket
+    - timed entry
+    - museum
+    - park pass
+    - reservation
+    - booking window
+    - skip the line
+    prompt: 'Non-food access only: timed-entry museums, parks, attractions, transport
+      tickets, and other scarce slots — with backup plan B/C and time buffers that
+      fit the drive spine. Do NOT own restaurant reservations (that is Gastronomy).
+      Be concrete about book-by dates and what fails if a slot is missed.'
+    model_params:
+      thinking: 'true'
+      effort: xhigh
+  neighborhood_scout:
+    title: Local Culture & Neighborhood Scout
+    core: false
+    modes:
+    - plan
+    - route
+    capability: light
+    backend: cursor
+    model: gemini-3.1-pro
+    family: google
+    triggers:
+    - neighborhood
+    - market
+    - walk
+    - local culture
+    - detour
+    - authentic
+    - off the beaten
+    prompt: 'Non-food authenticity: neighborhoods worth the detour, markets, and short
+      walks that earn the drive — not a generic sightseeing dump. Respect family
+      energy and the Architect''s overnight hubs. Leave restaurant picks to Gastronomy;
+      leave tickets to Reservation & Access.'

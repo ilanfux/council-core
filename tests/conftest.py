@@ -48,6 +48,15 @@ Merge after CI.
 
 ### Verdict
 SHIP — looks good.
+
+### Day-by-day skeleton
+Day 1 drive and settle; Day 2 food anchors.
+
+### Book now
+Reserve the timed-entry slot.
+
+### Alternatives
+Swap dinner for a casual diner if the booking fails.
 """
 
 

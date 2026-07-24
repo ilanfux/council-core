@@ -1,0 +1,9 @@
+# Travel advice is decision-support, not irreversible capital action: degrade with
+# an explicit warning rather than fail closed. Risk & Budget (risk_auditor) and
+# Ground-Truth Logistics (fact_analyst) must land for a trustworthy verdict.
+required_successful_roles: [risk_auditor, fact_analyst]
+on_missing_required_role: degrade_with_warning
+min_completed_advisors: 2
+min_completed_reviews: 0
+allow_same_family_fallback: true
+chairman_when_required_analysis_missing: synthesize_with_gap_note
