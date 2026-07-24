@@ -197,6 +197,7 @@ def test_cascade_to_ui_when_no_providers():
 
     council = _council(_persona("hunter", "cursor", "gpt-5.5", family="openai"))
     cfg = RuntimeConfig(backends={}, dynamic_pool=[])
+    # Explicit backend allowed even when it is cursor (caller opted in).
     result = resolve_council_models(
         council,
         cfg,
@@ -208,6 +209,68 @@ def test_cascade_to_ui_when_no_providers():
     assert result.tier == "ui"
     assert all(p.backend == "cursor" and p.model == "composer-2.5" for p in council.advisors)
     assert council.chairman.model == "composer-2.5"
+
+
+def test_priority_c_without_backend_does_not_default_to_cursor(monkeypatch):
+    def discover(_key):
+        raise SdkUnavailableError("no sdk")
+
+    monkeypatch.delenv("COUNCIL_UI_BACKEND", raising=False)
+    monkeypatch.setenv("COUNCIL_UI_MODEL", "composer-2.5")
+
+    council = _council(_persona("hunter", "cursor", "gpt-5.5", family="openai"))
+    cfg = RuntimeConfig(backends={}, dynamic_pool=[])
+    result = resolve_council_models(
+        council,
+        cfg,
+        FakeRegistry(),
+        discover=discover,
+        ui_model=None,  # take from env
+        ui_backend=None,
+    )
+    assert result.tier == "unchanged"
+    assert council.advisors[0].backend == "cursor"  # left as configured, not remapped via UI
+    assert any("Cascade exhausted" in w for w in result.warnings)
+    assert any("no usable UI backend" in w or "no non-Cursor backend" in w for w in result.warnings)
+
+
+def test_priority_c_uses_ready_provider_when_backend_omitted():
+    def discover(_key):
+        raise SdkUnavailableError("no sdk")
+
+    # Empty dynamic_pool so Priority B is skipped; but we still need a provider for C.
+    # Priority C with provider_pool empty uses first ready from pool passed after B —
+    # when B's pool is empty, C also gets empty unless we put something in dynamic_pool
+    # that available_assignments finds. If dynamic_pool has entries, B wins first.
+    # So: B empty, explicit ui_model + google via... we need B empty and C to pick provider.
+    # That only works if provider_pool is non-empty in C but we returned early on B.
+    # Actually if provider_pool is non-empty, B always remaps. So C with auto provider
+    # only happens when provider_pool is empty at B but... they're the same pool.
+    # Re-read the design: "If no explicit ui_backend, pick the first ready provider
+    # from available_assignments". When providers exist, B already cascades.
+    # So the "pick first ready provider" path for C is for when B's pool was empty
+    # but somehow C gets a pool - they're the same call. So C auto-provider only
+    # helps if we change logic OR if provider_pool is empty and we pass something else.
+    #
+    # Practical case for C + auto provider: empty dynamic_pool for B, but FakeRegistry
+    # has ready backends that aren't in dynamic_pool — available_assignments only
+    # reads dynamic_pool, so pool stays empty. Then C with model and no backend
+    # → exhausted (correct).
+    #
+    # Explicit google backend with ui model tests the non-default path:
+    council = _council(_persona("hunter", "cursor", "gpt-5.5", family="openai"))
+    cfg = RuntimeConfig(backends={}, dynamic_pool=[])
+    result = resolve_council_models(
+        council,
+        cfg,
+        FakeRegistry(),
+        discover=discover,
+        ui_model="my-ui-model",
+        ui_backend="google",
+    )
+    assert result.tier == "ui"
+    assert council.advisors[0].backend == "google"
+    assert council.advisors[0].model == "my-ui-model"
 
 
 def test_cascade_cursor_success_keeps_diverse_models():

@@ -330,15 +330,28 @@ def _force_ui_model(
 
 
 def _resolve_ui_model(
-    explicit_model: Optional[str], explicit_backend: Optional[str]
-) -> Tuple[Optional[str], str]:
+    explicit_model: Optional[str],
+    explicit_backend: Optional[str],
+    *,
+    provider_pool: Optional[Sequence] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve Priority-C UI model/backend.
+
+    Never defaults the backend to ``cursor`` (Priority C only runs after Cursor
+    already failed). Explicit ``ui_backend`` / ``COUNCIL_UI_BACKEND`` may still
+    name ``cursor``. Otherwise pick the first ready provider assignment, or
+    return ``(model, None)`` when no safe backend exists.
+    """
+
     model = (explicit_model or os.environ.get("COUNCIL_UI_MODEL") or "").strip() or None
-    backend = (
-        explicit_backend
-        or os.environ.get("COUNCIL_UI_BACKEND")
-        or "cursor"
-    ).strip().lower()
-    return model, backend
+    raw_backend = (explicit_backend or os.environ.get("COUNCIL_UI_BACKEND") or "").strip()
+    if raw_backend:
+        return model, raw_backend.lower()
+
+    pool = list(provider_pool or [])
+    if pool:
+        return model, str(pool[0].backend).strip().lower()
+    return model, None
 
 
 def _try_discover(
@@ -436,19 +449,24 @@ def resolve_council_models(
             warnings=warnings,
         )
 
-    # --- Priority C: skill UI model ---
-    model, backend = _resolve_ui_model(ui_model, ui_backend)
-    if model:
+    # --- Priority C: skill UI model (never implicit cursor backend) ---
+    model, backend = _resolve_ui_model(ui_model, ui_backend, provider_pool=provider_pool)
+    if model and backend:
         warnings.extend(_force_ui_model(council, model, backend))
         return ResolutionResult(
             tier="ui",
             assignments=_snapshot(council),
             warnings=warnings,
         )
+    if model and not backend:
+        warnings.append(
+            f"UI model '{model}' set but no non-Cursor backend available "
+            "(set --ui-backend / COUNCIL_UI_BACKEND explicitly, or configure providers)"
+        )
 
     warnings.append(
-        "Cascade exhausted: Cursor down, no ready provider APIs, and no "
-        "COUNCIL_UI_MODEL/--ui-model; leaving configured Cursor assignments "
+        "Cascade exhausted: Cursor down, no ready provider APIs, and no usable "
+        "UI backend; leaving configured Cursor assignments "
         "(personas may fail individually)."
     )
     return ResolutionResult(
