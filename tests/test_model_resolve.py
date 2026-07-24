@@ -256,3 +256,80 @@ def test_orchestrator_announces_assignments(packs=None):
     assert result.cascade_tier == "unchanged"
     assert announced and "Model assignments" in announced[0]
     assert result.model_assignments
+
+
+def test_require_cursor_fails_without_dispatch():
+    from council_core.format import render_markdown
+    from council_core.orchestrator import run_council
+    from council_core.pack import load_pack
+    from council_core.sdk_client import SdkUnavailableError
+
+    packs = {"dev_cursor": load_pack("dev_cursor")}
+    calls = {"dispatch": 0}
+
+    # Patch discover via resolve path: monkey through resolve_council_models discover
+    from council_core import model_resolve as mr
+
+    def boom(_key=None):
+        raise SdkUnavailableError("no key")
+
+    orig = mr.discover_models
+    mr.discover_models = boom
+    try:
+        req = CouncilRequest(
+            brief="smoke",
+            pack="dev_cursor",
+            mode="review",
+            stakes="standard",
+            require_cursor=True,
+        )
+        result, _ = run_council(req, registry=FakeRegistry(), packs=packs, seed=1)
+    finally:
+        mr.discover_models = orig
+
+    assert not result.convened
+    assert result.cascade_tier == "failed"
+    assert result.advisor_results == []
+    assert any("needs Cursor" in w for w in result.warnings)
+    assert "dispatch" not in {s.stage for s in result.execution.stages}
+
+
+def test_cascade_providers_banner_without_require_cursor():
+    from council_core.format import render_markdown
+    from council_core.orchestrator import run_council
+    from council_core.pack import load_pack
+    from council_core import model_resolve as mr
+    from council_core.sdk_client import SdkUnavailableError
+
+    packs = {"dev_cursor": load_pack("dev_cursor")}
+    cfg = RuntimeConfig(
+        backends={"google": {"type": "google"}, "groq": {"type": "openai"}},
+        dynamic_pool=[
+            {"backend": "google", "model": "gemini-2.5-flash", "family": "google"},
+            {"backend": "groq", "model": "llama-3.3-70b-versatile", "family": "groq"},
+        ],
+    )
+
+    def boom(_key=None):
+        raise SdkUnavailableError("no key")
+
+    orig = mr.discover_models
+    mr.discover_models = boom
+    try:
+        req = CouncilRequest(
+            brief="smoke",
+            pack="dev_cursor",
+            mode="review",
+            stakes="standard",
+            require_cursor=False,
+        )
+        result, _ = run_council(
+            req, config=cfg, registry=FakeRegistry(), packs=packs, seed=1
+        )
+    finally:
+        mr.discover_models = orig
+
+    assert result.convened
+    assert result.cascade_tier == "providers"
+    md = render_markdown(result)
+    assert "Cursor unavailable — ran on providers (grounding lost)" in md

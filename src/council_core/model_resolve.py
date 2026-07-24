@@ -367,8 +367,13 @@ def resolve_council_models(
     ui_model: Optional[str] = None,
     ui_backend: Optional[str] = None,
     discover: Optional[DiscoverFn] = None,
+    require_cursor: bool = False,
 ) -> ResolutionResult:
-    """Apply the A→B→C cascade. Mutates a *copy* of personas on ``council``."""
+    """Apply the A→B→C cascade. Mutates a *copy* of personas on ``council``.
+
+    When ``require_cursor`` is True and Priority A fails, returns ``tier="failed"``
+    without remapping onto providers/UI.
+    """
 
     _copy_council_personas(council)
     discover = discover or discover_models
@@ -401,6 +406,19 @@ def resolve_council_models(
                 warnings=warnings,
             )
         warnings.append("Cursor resolution left empty model ids; cascading to providers")
+
+    # Priority A did not succeed.
+    if require_cursor:
+        msg = (
+            "this pack needs Cursor; set CURSOR_API_KEY or drop --require-cursor "
+            "to allow provider fallback"
+        )
+        warnings.append(msg)
+        return ResolutionResult(
+            tier="failed",
+            assignments=_snapshot(council),
+            warnings=warnings,
+        )
 
     # --- Priority B: configured provider APIs ---
     try:

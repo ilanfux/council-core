@@ -194,13 +194,14 @@ def run_council(
             result, seed=seed, architect_raw=architect_raw, pack_version=pack_version
         )
 
-    # Model cascade (Cursor → providers → UI). Never hard-fails for missing Cursor.
+    # Model cascade (Cursor → providers → UI).
     resolution: ResolutionResult = resolve_council_models(
         council,
         config,
         registry,
         ui_model=request.ui_model,
         ui_backend=request.ui_backend,
+        require_cursor=request.require_cursor,
     )
     warnings.extend(resolution.warnings)
     if on_assignments is not None:
@@ -208,6 +209,31 @@ def run_council(
     stages.append(
         StageOutcome("model_resolve", "completed", f"cascade tier={resolution.tier}")
     )
+
+    if resolution.tier == "failed":
+        msg = (
+            "this pack needs Cursor; set CURSOR_API_KEY or drop --require-cursor "
+            "to allow provider fallback"
+        )
+        if msg not in warnings:
+            warnings.append(msg)
+        result = CouncilResult(
+            convened=False,
+            route=route,
+            council=council,
+            grounding=None,
+            advisor_results=[],
+            peer_reviews=[],
+            verdict=None,
+            execution=ExecutionSummary(status=RunStatus.FAILED, stages=stages),
+            warnings=warnings,
+            run_id=run_id,
+            model_assignments=resolution.assignments,
+            cascade_tier=resolution.tier,
+        )
+        return result, RunManifest.from_result(
+            result, seed=seed, architect_raw=architect_raw, pack_version=pack_version
+        )
 
     meter = MeteringSink(pack=council.pack_id, stakes=council.stakes)
 

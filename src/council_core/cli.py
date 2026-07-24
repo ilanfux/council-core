@@ -66,6 +66,7 @@ def _cmd_run(args) -> int:
         grounding_args=_grounding_args(args.ground),
         ui_model=args.ui_model,
         ui_backend=args.ui_backend,
+        require_cursor=bool(getattr(args, "require_cursor", False)),
     )
 
     def _announce(text: str) -> None:
@@ -399,7 +400,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     run.add_argument(
         "--ui-backend",
-        help="backend for --ui-model (default: cursor, or COUNCIL_UI_BACKEND)",
+        help="backend for --ui-model (default: first ready provider, or COUNCIL_UI_BACKEND)",
+    )
+    run.add_argument(
+        "--require-cursor",
+        action="store_true",
+        help="refuse provider/UI fallback when a Cursor-backed roster cannot use Cursor",
     )
     run.set_defaults(func=_cmd_run)
 

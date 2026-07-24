@@ -36,6 +36,14 @@ def render_markdown(result: CouncilResult) -> str:
         ", ".join(f"{p.title} ({p.model}@{p.backend})" for p in council.advisors) or "none"
     )
     parts.append(header + f"\n_Convened: {convened}_")
+    if result.cascade_tier == "providers":
+        parts.append(
+            "> WARNING: Cursor unavailable — ran on providers (grounding lost)"
+        )
+    elif result.cascade_tier == "ui":
+        parts.append(
+            "> WARNING: Cursor unavailable — ran on UI fallback model (grounding lost)"
+        )
     if council.skipped:
         parts.append(f"_Skipped: {', '.join(council.skipped)}_")
 

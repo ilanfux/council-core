@@ -52,6 +52,8 @@ class CouncilRequest:
     # Cascade Priority C: the skill's local UI model when Cursor + APIs are gone.
     ui_model: Optional[str] = None
     ui_backend: Optional[str] = None
+    # When True, a Cursor-needed roster refuses provider/UI fallback if Priority A fails.
+    require_cursor: bool = False
 
 
 @dataclass
