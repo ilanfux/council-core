@@ -293,17 +293,29 @@ preserve:
 
 ## 7. Suggested next-session task list
 
-1. **Cursor SDK enablement** (section 5) — highest leverage for a truly diverse
-   grounded council from one key. Port `sdk_client.py` + `resolve_models` + the
-   `_cursor_needed_for` gate + `council models`.
-2. **Skill wrapper** (section 4) — port a donor `SKILL.md`, point it at
-   `council run`, add `--json` stdout.
-3. **Resolve the CLI name collision** (section 3, item 8).
-4. **`draft-from-run` promotion** (PLAN.md Phase 6) + `council usage`.
-5. Optional: LLM router classifier; PDF/docx document grounding.
+Most of the original backlog is done (Cursor SDK + cascade, `*_cursor` packs,
+skill install, `--json`, `council usage`, `draft-from-run`, optional LLM
+classifier behind `router.use_classifier`, PDF/docx via `[docs]` extra). Remaining
+polish is optional.
 
-Verification for any change: `python -m pytest -q` (must stay green, 40+), then a
-live smoke run on a ready backend (`council run --pack career --mode strategy
---brief "..."`). For engine changes, re-run the dev-council review loop
-(`python -m council run --mode review ...` from `C:\dev-council`) as an external
-critic.
+Verification for any change: `python -m pytest -q` (must stay green; default
+suite excludes `@pytest.mark.integration`). Live Cursor:
+
+```bash
+python -m pytest -q --run-integration -m integration
+```
+
+### Cursor verified (2026-07-24)
+
+Manual live smoke on this machine with `CURSOR_API_KEY` set:
+
+- `council run --pack dev_cursor --mode review --stakes standard --require-cursor`
+  → cascade tier `cursor`, **4/4** advisors ok across multiple families
+  (Codex / Composer / GPT), Chairman verdict ok, status `completed`.
+- Provider-only `council run --pack finance` with no Cursor requirement →
+  cascade tier `unchanged`, convened successfully (document grounding warning
+  only when no files passed).
+- `--require-cursor` fails clearly when Cursor discovery is unavailable (no
+  silent provider downgrade).
+- Default `python -m pytest -q` skips `@pytest.mark.integration`; live path:
+  `python -m pytest -q --run-integration -m integration`.
