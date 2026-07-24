@@ -35,7 +35,7 @@ class MeteringSink:
         model: str,
         family: str,
         outcome: AgentOutcome,
-        backend: str = "cursor",
+        backend: str = "",
     ) -> None:
         row = {
             "ts": datetime.now(timezone.utc).isoformat(),

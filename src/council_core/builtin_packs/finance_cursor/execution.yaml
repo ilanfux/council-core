@@ -1,0 +1,10 @@
+# High-stakes: fail closed if the mandatory Fact Analyst or Risk Auditor did not
+# complete. No verified factual base or no adversarial review => no synthesized
+# verdict presented as decision-ready.
+required_successful_roles: [fact_analyst, risk_auditor]
+on_missing_required_role: fail_closed
+min_completed_advisors: 2
+min_completed_reviews: 0
+allow_same_family_fallback: false
+chairman_when_required_analysis_missing: fail_closed
+on_budget_exhausted: stop

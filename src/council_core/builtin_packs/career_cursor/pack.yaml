@@ -1,0 +1,27 @@
+schema_version: 1
+id: career_cursor
+version: 1.0.0
+display_name: Career Council (Cursor SDK)
+
+# Opt-in: do not compete with free-provider `career` on routing.
+routing:
+  triggers:
+    - cursor career
+    - career cursor
+    - grounded career council
+
+council:
+  personas_file: personas.yaml
+  tiers_file: tiers.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: documents
+
+output:
+  schema_file: output_contract.yaml
+
+execution:
+  policy_file: execution.yaml

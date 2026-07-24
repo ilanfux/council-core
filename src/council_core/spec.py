@@ -40,7 +40,7 @@ class CouncilSpec:
     peer_review: bool
     default_model: str
     peer_review_pool: Dict[str, str] = field(default_factory=dict)
-    peer_review_backend: str = "cursor"
+    peer_review_backend: str = "google"
     peer_review_backends: Dict[str, str] = field(default_factory=dict)
     skipped: List[str] = field(default_factory=list)
     roster_repairs: List[RosterRepair] = field(default_factory=list)

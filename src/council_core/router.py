@@ -65,6 +65,17 @@ class Router:
 
         if not top or top.score < _MIN_ABS_SCORE:
             reason = "no packs are available" if not packs else "no pack triggers matched the brief"
+            if self._generate is not None and packs:
+                from council_core.router_classifier import classify_route
+
+                decision = classify_route(
+                    request.brief or "",
+                    scored,
+                    set(packs),
+                    self._generate,
+                )
+                if decision is not None and decision.kind != "choice_required":
+                    return decision
             return RouteDecision(
                 kind="choice_required",
                 candidates=scored,
@@ -86,11 +97,23 @@ class Router:
                 reason=f"'{top.pack_id}' matched {top.score} triggers (margin {margin})",
             )
 
-        # ambiguous: two packs close together -> let the caller choose
+        # ambiguous: two packs close together -> optional LLM classifier, else ask
+        if self._generate is not None:
+            from council_core.router_classifier import classify_route
+
+            decision = classify_route(
+                request.brief or "",
+                scored,
+                set(packs),
+                self._generate,
+            )
+            if decision is not None:
+                return decision
+
         return RouteDecision(
             kind="choice_required",
             candidates=scored,
             confidence=confidence,
             reason=f"ambiguous: '{top.pack_id}' ({top.score}) vs "
-                   f"'{second.pack_id if second else '-'}' ({second.score if second else 0})",
+                   f"'{second.pack_id if second else '-'}' ({second_score})",
         )

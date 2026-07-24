@@ -28,8 +28,8 @@ class PersonaSpec:
     # {"thinking": "true", "effort": "high"} (Claude). Empty = provider default.
     model_params: Dict[str, str] = field(default_factory=dict)
     # Execution backend key (resolved against the runtime backend registry). The
-    # default is supplied by the pack, never hardcoded to a specific provider.
-    backend: str = "cursor"
+    # pack supplies the default; empty means "unset — pack loader must fill it".
+    backend: str = ""
     # Mandatory-role tag: "chairman" | "risk_auditor" | "fact_analyst" | None.
     # Used by the execution policy and the dynamic core contract.
     role_id: Optional[str] = None
@@ -49,6 +49,9 @@ class CouncilRequest:
     roster: Optional[List[str]] = None    # explicit advisor keys (pack rosters only)
     peer_review_override: Optional[bool] = None
     grounding_args: Mapping[str, str] = field(default_factory=dict)
+    # Cascade Priority C: the skill's local UI model when Cursor + APIs are gone.
+    ui_model: Optional[str] = None
+    ui_backend: Optional[str] = None
 
 
 @dataclass

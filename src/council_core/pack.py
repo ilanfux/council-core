@@ -123,7 +123,7 @@ class PackDefinition:
     grounding: Grounding
     output_contract: OutputContract
     execution_policy: ExecutionPolicy
-    default_backend: str = "cursor"
+    default_backend: str = "google"
     default_model: str = ""
     peer_review_pool: Dict[str, str] = field(default_factory=dict)
     peer_review_backend: str = ""
@@ -226,7 +226,7 @@ def load_pack(name_or_path: str, pack_path: Optional[str] = None) -> PackDefinit
 
     # personas + tiers + modes
     council_raw = _read_yaml(_pack_file(pack_dir, manifest.council.personas_file))
-    default_backend = str(council_raw.get("default_backend", "cursor")).strip().lower()
+    default_backend = str(council_raw.get("default_backend", "google")).strip().lower()
     default_model = str(council_raw.get("default_model", "")).strip()
 
     declared_modes = [str(m).strip() for m in (council_raw.get("modes") or [])] or ["default"]

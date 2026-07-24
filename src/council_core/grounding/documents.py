@@ -1,17 +1,15 @@
 """Document grounding (finance / career packs).
 
-v1 scope: treat user-supplied document text as evidence. Documents are passed via
-the grounding args (``documents`` = newline-delimited ``label::path`` or ``path``
-entries, or ``documents_dir`` = a folder of text/markdown files). Binary parsing
-(PDF/docx) is deliberately out of scope for v1 — the pack asks the user to paste
-or export text — but each file becomes a distinct, provenance-tagged evidence
-item so the Fact Analyst can cite sources.
+Documents are passed via grounding args (``documents`` = newline-delimited
+``label::path`` or ``path`` entries, or ``documents_dir``). Text formats are
+always supported; PDF/docx are extracted when optional deps are installed
+(``pip install council-core[docs]``).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Set, Tuple
 
 from council_core.grounding.bundle import (
     EvidenceItem,
@@ -22,13 +20,65 @@ from council_core.grounding.bundle import (
 
 _MAX_FILE_CHARS = 40_000
 _TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".csv", ".json", ".yaml", ".yml", ".log"}
+_PDF_SUFFIXES = {".pdf"}
+_DOCX_SUFFIXES = {".docx"}
+_SUPPORTED_SUFFIXES = _TEXT_SUFFIXES | _PDF_SUFFIXES | _DOCX_SUFFIXES
 
 
-def _read_text(path: Path) -> tuple[str, bool]:
-    raw = path.read_text(encoding="utf-8", errors="replace")
+def _truncate(raw: str) -> Tuple[str, bool]:
     if len(raw) <= _MAX_FILE_CHARS:
         return raw, False
     return raw[:_MAX_FILE_CHARS] + "\n... [truncated] ...", True
+
+
+def _read_text(path: Path) -> Tuple[str, bool]:
+    return _truncate(path.read_text(encoding="utf-8", errors="replace"))
+
+
+def _read_pdf(path: Path) -> Tuple[str, bool, Optional[str]]:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except Exception as error:
+        return "", False, f"PDF support requires pypdf (`pip install council-core[docs]`): {error}"
+    try:
+        reader = PdfReader(str(path))
+        parts: List[str] = []
+        for page in reader.pages:
+            parts.append(page.extract_text() or "")
+        text, cut = _truncate("\n".join(parts).strip())
+        if not text.strip():
+            return "", False, f"PDF contained no extractable text: {path}"
+        return text, cut, None
+    except Exception as error:
+        return "", False, f"failed to read PDF {path.name}: {error}"
+
+
+def _read_docx(path: Path) -> Tuple[str, bool, Optional[str]]:
+    try:
+        import docx  # type: ignore  # python-docx
+    except Exception as error:
+        return "", False, f"DOCX support requires python-docx (`pip install council-core[docs]`): {error}"
+    try:
+        document = docx.Document(str(path))
+        parts = [p.text for p in document.paragraphs if p.text]
+        text, cut = _truncate("\n".join(parts).strip())
+        if not text.strip():
+            return "", False, f"DOCX contained no extractable text: {path}"
+        return text, cut, None
+    except Exception as error:
+        return "", False, f"failed to read DOCX {path.name}: {error}"
+
+
+def _read_document(path: Path) -> Tuple[str, bool, Optional[str]]:
+    suffix = path.suffix.lower()
+    if suffix in _TEXT_SUFFIXES:
+        content, cut = _read_text(path)
+        return content, cut, None
+    if suffix in _PDF_SUFFIXES:
+        return _read_pdf(path)
+    if suffix in _DOCX_SUFFIXES:
+        return _read_docx(path)
+    return "", False, f"unsupported document type: {path}"
 
 
 class DocumentGrounding:
@@ -39,6 +89,7 @@ class DocumentGrounding:
         items: List[EvidenceItem] = []
         warnings: List[str] = []
         truncated = False
+        allowed: Set[str] = set(_SUPPORTED_SUFFIXES)
 
         specs = str((request.args or {}).get("documents", "")).strip()
         entries = [line.strip() for line in specs.splitlines() if line.strip()] if specs else []
@@ -48,7 +99,7 @@ class DocumentGrounding:
             dpath = (base / docs_dir) if not Path(docs_dir).is_absolute() else Path(docs_dir)
             if dpath.is_dir():
                 for f in sorted(dpath.iterdir()):
-                    if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES:
+                    if f.is_file() and f.suffix.lower() in allowed:
                         entries.append(str(f))
             else:
                 warnings.append(f"documents_dir not found: {docs_dir}")
@@ -63,12 +114,15 @@ class DocumentGrounding:
             if not p.is_file():
                 warnings.append(f"document not found: {raw_path}")
                 continue
-            if p.suffix.lower() not in _TEXT_SUFFIXES:
+            if p.suffix.lower() not in allowed:
                 warnings.append(
-                    f"skipping non-text document (v1 needs text/markdown; export it first): {raw_path}"
+                    f"skipping unsupported document type (use text/markdown/pdf/docx): {raw_path}"
                 )
                 continue
-            content, was_cut = _read_text(p)
+            content, was_cut, error = _read_document(p)
+            if error:
+                warnings.append(error)
+                continue
             truncated = truncated or was_cut
             items.append(
                 EvidenceItem(
@@ -77,6 +131,7 @@ class DocumentGrounding:
                     title=label.strip() or p.name,
                     content=content,
                     location=str(p),
+                    metadata={"suffix": p.suffix.lower()},
                 )
             )
 

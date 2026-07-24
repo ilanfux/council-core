@@ -1,0 +1,269 @@
+# Dev Council on Cursor SDK — one key, multiple model families.
+#
+# Every persona uses `backend: cursor` so a single CURSOR_API_KEY runs GPT/Codex,
+# Claude, Gemini, and Composer as grounded local agents that browse the repo.
+# Model ids are Cursor catalog base ids; `council models` lists what your key
+# can use. Unavailable ids fall back via the cascade (never invent a slug).
+# Family-specific params: GPT/Codex `reasoning`; Claude `effort`/`thinking`.
+
+default_backend: cursor
+default_model: gpt-5.5
+
+modes: [review, plan]
+
+chairman:
+  title: Chairman
+  backend: cursor
+  model: gpt-5.5
+  family: openai
+  model_params:
+    reasoning: high
+
+peer_review_backend: cursor
+peer_review_backends:
+  openai: cursor
+  anthropic: cursor
+  google: cursor
+  cursor: cursor
+peer_review_pool:
+  openai: gpt-5.4
+  anthropic: claude-sonnet-4-6
+  google: gemini-3.1-pro
+  cursor: composer-2.5
+
+personas:
+  # ---- review mode ----
+  bug_hunter:
+    title: Bug Hunter
+    modes: [review]
+    core: true
+    capability: heavy
+    backend: cursor
+    model: gpt-5.3-codex
+    family: openai
+    model_params:
+      reasoning: high
+      fast: "false"
+    lens: >-
+      Logic and edge cases: null/None/undefined, off-by-one, boundary inputs,
+      empty collections, concurrency/races, resource leaks, swallowed or
+      incorrect error handling. Assume a bug exists and hunt it.
+  bug_hunter_deep:
+    title: Bug Hunter - Deep Reasoning
+    modes: [review]
+    core: false
+    capability: heavy
+    backend: cursor
+    model: claude-opus-4-8
+    family: anthropic
+    model_params:
+      thinking: "true"
+      effort: xhigh
+    lens: >-
+      An independent second pass at correctness on a different model family.
+      Reason hard about concurrency and ordering, state-machine and error-path
+      correctness, and subtle logic/edge cases the first hunter may share a
+      blind spot on. Converge or dissent on your own evidence.
+  maintainability:
+    title: Maintainability Reviewer
+    modes: [review]
+    core: true
+    capability: light
+    backend: cursor
+    model: composer-2.5
+    family: cursor
+    lens: >-
+      Readability, naming, SOLID, duplication, dead code, complexity, general
+      code quality.
+  test_reviewer:
+    title: Test Reviewer
+    modes: [review]
+    core: true
+    capability: medium
+    backend: cursor
+    model: gpt-5.5
+    family: openai
+    lens: >-
+      Coverage of the changed lines, missing edge-case and failure-path tests,
+      brittle or flaky tests, tests asserting the wrong thing.
+  standards_compliance:
+    title: Standards & Compliance Reviewer
+    modes: [review]
+    core: true
+    capability: medium
+    backend: cursor
+    model: gpt-5.4
+    family: openai
+    lens: >-
+      Hold the change to the project's documented rules and contracts
+      (.cursor/rules, AGENTS.md/CLAUDE.md, README, config intent): inline
+      imports, naming, layering, hardcoded/environment-specific values,
+      secret handling. Judge against the written rule; treat documented
+      intentional exceptions as compliant.
+  security:
+    title: Security Reviewer
+    modes: [review]
+    core: false
+    capability: heavy
+    backend: cursor
+    model: claude-opus-4-8
+    family: anthropic
+    model_params:
+      thinking: "true"
+      effort: xhigh
+    triggers: [auth, secret, token, crypto, password, pii, injection, ssrf, upload]
+    lens: >-
+      Injection (SQL/command/template), authz/authn gaps, secrets in code/logs,
+      input validation, unsafe deserialization, weak crypto, SSRF/path traversal.
+  performance:
+    title: Performance Reviewer
+    modes: [review]
+    core: false
+    capability: heavy
+    backend: cursor
+    model: gemini-3.1-pro
+    family: google
+    triggers: [query, loop, hot path, n+1, pagination, cache, batch, latency, index]
+    lens: >-
+      N+1 queries, unbounded loops/allocations, blocking I/O on hot paths,
+      missing pagination, inefficient queries, missing/incorrect caching.
+  api_compat:
+    title: API Contract & Backward-Compat Reviewer
+    modes: [review]
+    core: false
+    capability: medium
+    backend: cursor
+    model: claude-sonnet-4-6
+    family: anthropic
+    triggers: [api, dto, contract, schema, event, public, endpoint, version, payload]
+    lens: >-
+      Will this break consumers? Public API/DTO/event-schema changes,
+      removed/renamed fields, default/nullability changes, versioning.
+  data_dba:
+    title: Data / DBA Reviewer
+    modes: [review]
+    core: false
+    capability: medium
+    backend: cursor
+    model: gpt-5.4
+    family: openai
+    triggers: [migration, schema, table, column, index, sql, query, data model]
+    lens: >-
+      Migration safety and reversibility, backward-compatible schema changes,
+      missing indexes, lock risk on large tables, data integrity.
+
+  # ---- plan mode ----
+  product_manager:
+    title: Product Manager
+    modes: [plan]
+    core: true
+    capability: light
+    backend: cursor
+    model: gpt-5.4-mini
+    family: openai
+    lens: >-
+      Are we solving the right problem? Real user/business value, who needs
+      this, correct scope, unstated/assumed requirements.
+  architect:
+    title: Architect
+    modes: [plan]
+    core: true
+    capability: heavy
+    backend: cursor
+    model: claude-opus-4-8
+    family: anthropic
+    model_params:
+      thinking: "true"
+      effort: high
+    lens: >-
+      System shape: boundaries and responsibilities, data model, API/contract
+      design, coupling, failure modes, backward compatibility, scalability.
+  pragmatist:
+    title: Dev Lead - The Pragmatist
+    modes: [plan]
+    core: true
+    capability: light
+    backend: cursor
+    model: composer-2.5
+    family: cursor
+    lens: >-
+      Simplest thing that works. YAGNI, smallest diff, lowest risk now.
+      Suspicious of speculative abstraction and gold-plating.
+  long_term:
+    title: Dev Lead - The Long-term Engineer
+    modes: [plan]
+    core: true
+    capability: heavy
+    backend: cursor
+    model: gpt-5.5
+    family: openai
+    model_params:
+      reasoning: high
+    lens: >-
+      The codebase in 12 months. Correctness, testability, maintainability,
+      avoiding tech debt and footguns. Clashes with the Pragmatist by design.
+  ux:
+    title: UX/UI Expert
+    modes: [plan]
+    core: false
+    capability: light
+    backend: cursor
+    model: gpt-5.4-mini
+    family: openai
+    triggers: [ui, cli, ux, form, screen, accessibility]
+    lens: >-
+      Flows, clarity, error/empty/loading states, accessibility, consistency
+      with existing patterns.
+  security_threat:
+    title: Security / Threat Modeler
+    modes: [plan]
+    core: false
+    capability: heavy
+    backend: cursor
+    model: claude-opus-4-7
+    family: anthropic
+    model_params:
+      thinking: "true"
+      effort: xhigh
+    triggers: [auth, secret, pii, untrusted input, deserialize]
+    lens: >-
+      Threat model the design: trust boundaries, authn/authz, data exposure,
+      input validation, secrets, abuse cases. Catch the flaw before it is built.
+  performance_scalability:
+    title: Performance / Scalability Engineer
+    modes: [plan]
+    core: false
+    capability: heavy
+    backend: cursor
+    model: gemini-3.1-pro
+    family: google
+    triggers: [hot path, volume, throughput, latency, query, external call]
+    lens: >-
+      Design-time perf: data access patterns, volume at scale, latency budget,
+      caching, pagination, hot paths.
+  sre:
+    title: SRE / Reliability & Operability
+    modes: [plan]
+    core: false
+    capability: heavy
+    backend: cursor
+    model: gpt-5.4
+    family: openai
+    model_params:
+      reasoning: high
+    triggers: [service, endpoint, dependency, async, deploy, rollback]
+    lens: >-
+      What happens at 2am? Failure modes, timeouts/retries/circuit-breakers,
+      idempotency, rollback, config, alerting, observability.
+  qa:
+    title: QA / Test Strategy
+    modes: [plan]
+    core: false
+    capability: light
+    backend: cursor
+    model: gpt-5.4-mini
+    family: openai
+    triggers: [behavior, logic, feature, edge case]
+    lens: >-
+      How will we prove this works? Testability, key scenarios and edge cases,
+      what is hard to test and how to make it testable.

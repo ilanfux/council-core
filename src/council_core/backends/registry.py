@@ -34,7 +34,7 @@ class BackendRegistry:
         self._cache: Dict[str, Backend] = {}
 
     def get(self, name: str) -> Backend:
-        key = (name or "cursor").strip().lower()
+        key = (name or "google").strip().lower()
         if key in self._cache:
             return self._cache[key]
         cfg = self._config.get(key, {}) or {}

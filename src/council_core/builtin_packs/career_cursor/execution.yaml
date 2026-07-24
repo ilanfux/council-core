@@ -1,0 +1,10 @@
+# Career advice is decision-support, not irreversible: degrade with an explicit
+# warning rather than fail closed. The leading Skeptic (risk_auditor) and the
+# mandatory ghostwriter authenticity pass (authenticity_auditor) are the roles
+# that must land for a trustworthy verdict.
+required_successful_roles: [risk_auditor, authenticity_auditor]
+on_missing_required_role: degrade_with_warning
+min_completed_advisors: 2
+min_completed_reviews: 0
+allow_same_family_fallback: true
+chairman_when_required_analysis_missing: synthesize_with_gap_note

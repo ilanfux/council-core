@@ -1,0 +1,26 @@
+schema_version: 1
+id: finance_cursor
+version: 1.0.0
+display_name: Finance & Budget Council (Cursor SDK)
+
+# Opt-in: do not compete with free-provider `finance` on routing.
+routing:
+  triggers:
+    - cursor finance
+    - finance cursor
+    - grounded finance council
+
+council:
+  personas_file: personas.yaml
+
+prompts:
+  directory: prompts
+
+grounding:
+  provider: documents
+
+output:
+  schema: finance_brief_v1
+
+execution:
+  policy_file: execution.yaml

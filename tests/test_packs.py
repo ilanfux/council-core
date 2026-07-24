@@ -7,7 +7,10 @@ import pytest
 from council_core.pack import list_builtin_packs, load_pack
 
 
-@pytest.mark.parametrize("pid", ["dev", "finance", "career"])
+@pytest.mark.parametrize(
+    "pid",
+    ["dev", "dev_cursor", "finance", "finance_cursor", "career", "career_cursor"],
+)
 def test_pack_loads(pid):
     pack = load_pack(pid)
     assert pack.id == pid
@@ -22,8 +25,29 @@ def test_pack_loads(pid):
 
 
 def test_builtins_discovered():
-    assert set(list_builtin_packs()) >= {"dev", "finance", "career"}
+    assert set(list_builtin_packs()) >= {
+        "dev",
+        "dev_cursor",
+        "finance",
+        "finance_cursor",
+        "career",
+        "career_cursor",
+    }
 
+
+def test_dev_cursor_uses_cursor_backends():
+    pack = load_pack("dev_cursor")
+    assert pack.default_backend == "cursor"
+    assert pack.chairman.backend == "cursor"
+    assert all(p.backend == "cursor" for p in pack.personas.values())
+    # Diverse families across the core review roster
+    review = pack.personas_for_mode("review")
+    core = [p for p in review.values() if p.core]
+    families = {p.family for p in core}
+    assert len(families) >= 2
+    # Opt-in triggers — must not steal the free `dev` pack's routing surface
+    assert "code" not in pack.triggers
+    assert any("cursor" in t for t in pack.triggers)
 
 def test_finance_mandatory_roles_and_failclosed():
     pack = load_pack("finance")

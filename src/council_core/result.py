@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from council_core.grounding import GroundingBundle
 from council_core.input import AdvisorResult, AgentOutcome, PeerReviewResult
+from council_core.model_resolve import PersonaAssignment
 from council_core.policy import RunStatus
 from council_core.router import RouteDecision
 from council_core.spec import CouncilSpec
@@ -44,3 +45,5 @@ class CouncilResult:
     warnings: List[str] = field(default_factory=list)
     contract_violations: List[str] = field(default_factory=list)
     run_id: str = ""
+    model_assignments: List[PersonaAssignment] = field(default_factory=list)
+    cascade_tier: str = ""

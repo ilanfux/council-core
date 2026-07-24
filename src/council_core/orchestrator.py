@@ -21,6 +21,7 @@ from council_core.grounding import GroundingRequest
 from council_core.input import CouncilRequest, PersonaSpec
 from council_core.manifest import RunManifest
 from council_core.metering import MeteringSink
+from council_core.model_resolve import ResolutionResult, resolve_council_models
 from council_core.pack import PackDefinition, list_builtin_packs, load_pack
 from council_core.persona_architect import PersonaArchitect
 from council_core.policy import ExecutionPolicy, MissingRoleBehavior, RunStatus
@@ -112,13 +113,21 @@ def run_council(
     registry: Optional[BackendRegistry] = None,
     packs: Optional[Dict[str, PackDefinition]] = None,
     architect: Optional[PersonaArchitect] = None,
+    on_assignments: Optional[Callable[[str], None]] = None,
 ) -> Tuple[CouncilResult, Optional[RunManifest]]:
     config = config or load_runtime_config()
     registry = registry or config.registry()
     packs = packs if packs is not None else _load_all_packs(config)
     run_id = uuid.uuid4().hex[:16]
 
-    route: RouteDecision = Router().route(request, packs)
+    # Prefer deterministic scoring; inject architect backend as optional classifier.
+    router_generate = None
+    if not (request.pack or request.pack_path or request.dynamic):
+        try:
+            router_generate = _make_generate(registry, config.architect, request.cwd)
+        except Exception:
+            router_generate = None
+    route: RouteDecision = Router(generate=router_generate).route(request, packs)
 
     # choice_required -> hand back to the caller; do NOT ask here.
     if route.kind == "choice_required":
@@ -184,6 +193,21 @@ def run_council(
         return result, RunManifest.from_result(
             result, seed=seed, architect_raw=architect_raw, pack_version=pack_version
         )
+
+    # Model cascade (Cursor → providers → UI). Never hard-fails for missing Cursor.
+    resolution: ResolutionResult = resolve_council_models(
+        council,
+        config,
+        registry,
+        ui_model=request.ui_model,
+        ui_backend=request.ui_backend,
+    )
+    warnings.extend(resolution.warnings)
+    if on_assignments is not None:
+        on_assignments(resolution.summary_text())
+    stages.append(
+        StageOutcome("model_resolve", "completed", f"cascade tier={resolution.tier}")
+    )
 
     meter = MeteringSink(pack=council.pack_id, stakes=council.stakes)
 
@@ -266,6 +290,7 @@ def run_council(
         advisor_results=advisor_results, peer_reviews=peer_reviews, verdict=verdict,
         execution=ExecutionSummary(status=status, stages=stages),
         warnings=warnings, contract_violations=contract_violations, run_id=run_id,
+        model_assignments=resolution.assignments, cascade_tier=resolution.tier,
     )
     manifest = RunManifest.from_result(
         result, seed=seed, architect_raw=architect_raw, pack_version=pack_version,
