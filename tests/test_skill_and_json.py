@@ -66,11 +66,15 @@ def test_run_json_flag(monkeypatch, capsys):
 
 
 def test_skill_source_exists():
-    assert (skill_source_dir() / "SKILL.md").is_file()
+    src = skill_source_dir()
+    assert (src / "SKILL.md").is_file()
+    # Canonical path lives under the package, not repo-root duplicates.
+    assert "council_core" in src.parts and "skills" in src.parts
 
 
 def test_skill_install_to_temp(tmp_path):
-    # Treat tmp_path as a fake home by installing --project under tmp_path
+    src = skill_source_dir()
+    source_text = (src / "SKILL.md").read_text(encoding="utf-8")
     installed, notes = install_skill(
         cursor=True,
         claude=True,
@@ -80,7 +84,9 @@ def test_skill_install_to_temp(tmp_path):
     )
     assert len(installed) == 2
     for path in installed:
-        assert (path / "SKILL.md").is_file()
+        copied = path / "SKILL.md"
+        assert copied.is_file()
+        assert copied.read_text(encoding="utf-8") == source_text
         assert "council" in path.parts
     assert any("Restart" in n for n in notes)
 

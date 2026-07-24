@@ -1,4 +1,9 @@
-"""Install the council skill into Cursor and/or Claude Code skill directories."""
+"""Install the council skill into Cursor and/or Claude Code skill directories.
+
+Canonical source of truth: ``council_core/skills/council/SKILL.md`` (package data).
+Host copies under ``~/.cursor/skills`` / ``~/.claude/skills`` are produced only by
+``council skill install`` (or a manual copy of that packaged file).
+"""
 
 from __future__ import annotations
 
@@ -10,20 +15,15 @@ SKILL_NAME = "council"
 
 
 def skill_source_dir() -> Path:
-    """Prefer repo ``skills/council``; fall back to the packaged copy."""
+    """Packaged skill directory shipped with council_core."""
 
-    # council_core/ -> src/ -> repo root (editable / source checkout)
-    repo_root = Path(__file__).resolve().parents[2]
-    repo_skill = repo_root / "skills" / SKILL_NAME
-    if (repo_skill / "SKILL.md").is_file():
-        return repo_skill
     bundled = Path(__file__).resolve().parent / "skills" / SKILL_NAME
     if (bundled / "SKILL.md").is_file():
         return bundled
     raise FileNotFoundError(
-        "Skill source missing (looked in repo skills/council and package "
-        "council_core/skills/council)."
+        "Skill source missing: expected packaged council_core/skills/council/SKILL.md."
     )
+
 
 def install_targets(
     *,
@@ -59,13 +59,14 @@ def install_skill(
     project_root: Optional[Path] = None,
     source: Optional[Path] = None,
 ) -> Tuple[List[Path], List[str]]:
-    """Copy the skill into assistant skill dirs. Returns (installed_paths, notes)."""
+    """Copy the packaged skill into assistant skill dirs. Returns (paths, notes)."""
 
     src = source or skill_source_dir()
     skill_md = src / "SKILL.md"
     if not skill_md.is_file():
         raise FileNotFoundError(
-            f"Skill source missing: {skill_md}. Expected skills/council/SKILL.md in the repo."
+            f"Skill source missing: {skill_md}. Expected packaged "
+            "council_core/skills/council/SKILL.md."
         )
 
     notes: List[str] = []
@@ -101,5 +102,6 @@ def describe_manual_steps() -> str:
         f"  Claude personal:  copy {src} -> ~/.claude/skills/council/\n"
         "  Cursor project:   copy -> <repo>/.cursor/skills/council/\n"
         "  Claude project:   copy -> <repo>/.claude/skills/council/\n"
-        "Then restart the assistant so it reloads skills."
+        "Then restart the assistant so it reloads skills.\n"
+        "Canonical source: src/council_core/skills/council/SKILL.md"
     )
