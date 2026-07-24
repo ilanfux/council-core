@@ -19,6 +19,7 @@ anthropic = ["anthropic>=0.39"]
 google = ["google-genai>=0.3"]
 cursor = ["cursor-sdk>=0.1"]
 docs = ["pypdf>=4.0", "python-docx>=1.1"]
+mcp = ["mcp>=1.2"]
 all = [
     "openai>=1.0",
     "anthropic>=0.39",
@@ -26,11 +27,13 @@ all = [
     "cursor-sdk>=0.1",
     "pypdf>=4.0",
     "python-docx>=1.1",
+    "mcp>=1.2",
 ]
 dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.10"]
 
 [project.scripts]
 council = "council_core.cli:main"
+council-mcp = "council_core.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
