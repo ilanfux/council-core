@@ -17,6 +17,8 @@ from council_core.pack_promote import draft_pack_from_manifest, validate_draft_p
 from council_core.router import Router
 from council_core.router_classifier import classify_route
 
+from conftest import FakeRegistry
+
 
 def test_cursor_domain_packs_load():
     assert {"career_cursor", "finance_cursor"} <= set(list_builtin_packs())
@@ -129,12 +131,6 @@ def test_classifier_rejects_unknown_pack():
 def test_router_uses_classifier_on_ambiguity():
     packs = {p: load_pack(p) for p in ("dev", "finance", "career")}
 
-    def gen(_prompt: str) -> str:
-        return '{"kind":"pack","selected_pack":"career","reason":"job","confidence":0.8}'
-
-    # Craft a brief that hits both career and finance-ish triggers weakly... 
-    # Actually force ambiguity via equal scores by using Router with matching.
-    # Simpler: no trigger match path with classifier choosing dynamic.
     def gen_dynamic(_prompt: str) -> str:
         return '{"kind":"dynamic","selected_pack":null,"reason":"novel","confidence":0.7}'
 
@@ -142,6 +138,88 @@ def test_router_uses_classifier_on_ambiguity():
         CouncilRequest(brief="what wine pairs with grilled fish"), packs
     )
     assert d.kind == "dynamic"
+
+
+def test_orchestrator_classifier_off_by_default():
+    from council_core.config_loader import RuntimeConfig
+    from council_core.orchestrator import run_council
+
+    packs = {p: load_pack(p) for p in ("dev", "finance", "career")}
+    calls = {"n": 0}
+
+    def counting_gen(prompt: str):
+        calls["n"] += 1
+        return '{"kind":"dynamic","selected_pack":null,"reason":"x","confidence":0.9}'
+
+    # Patch _make_generate so if classifier wiring runs, we would see calls.
+    import council_core.orchestrator as orch
+
+    orig = orch._make_generate
+
+    def wrap(registry, spec, cwd):
+        calls["built"] = True
+        return counting_gen
+
+    orch._make_generate = wrap
+    try:
+        cfg = RuntimeConfig(
+            backends={},
+            router={"use_classifier": False},
+            architect={"backend": "google", "model": "x"},
+        )
+        result, _ = run_council(
+            CouncilRequest(brief="what wine pairs with grilled fish"),
+            config=cfg,
+            registry=FakeRegistry(),
+            packs=packs,
+        )
+    finally:
+        orch._make_generate = orig
+
+    assert not result.convened
+    assert result.route.kind == "choice_required"
+    assert calls["n"] == 0
+    assert "built" not in calls
+
+
+def test_orchestrator_classifier_on_when_configured():
+    from council_core.config_loader import RuntimeConfig
+    from council_core.orchestrator import run_council
+
+    packs = {p: load_pack(p) for p in ("dev", "finance", "career")}
+    calls = {"n": 0}
+
+    def counting_gen(prompt: str):
+        calls["n"] += 1
+        return '{"kind":"pack","selected_pack":"career","reason":"job","confidence":0.9}'
+
+    import council_core.orchestrator as orch
+
+    orig = orch._make_generate
+    orch._make_generate = lambda registry, spec, cwd: counting_gen
+    try:
+        cfg = RuntimeConfig(
+            backends={"google": {"type": "google"}},
+            router={"use_classifier": True},
+            architect={"backend": "google", "model": "x"},
+            dynamic_pool=[
+                {"backend": "google", "model": "gemini-2.5-flash", "family": "google"},
+            ],
+            chairman={"backend": "google", "model": "gemini-2.5-flash", "family": "google"},
+        )
+        result, _ = run_council(
+            CouncilRequest(brief="what wine pairs with grilled fish"),
+            config=cfg,
+            registry=FakeRegistry(),
+            packs=packs,
+            seed=1,
+        )
+    finally:
+        orch._make_generate = orig
+
+    assert calls["n"] >= 1
+    assert result.route.kind == "pack"
+    assert result.route.selected_pack == "career"
 
 
 def test_pdf_reader_missing_dep_warns(tmp_path, monkeypatch):

@@ -32,3 +32,8 @@ architect: { backend: google, model: gemini-2.5-flash, family: google }
 budget:
   monthly_agent_run_ceiling: 600
   warn_fraction: 0.6
+
+# Optional LLM classifier for ambiguous / unmatched briefs. Default off — the
+# deterministic router returns choice_required without an extra model call.
+router:
+  use_classifier: false

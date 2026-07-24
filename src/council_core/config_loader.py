@@ -33,9 +33,14 @@ class RuntimeConfig:
     chairman: Dict[str, str] = field(default_factory=dict)
     architect: Dict[str, str] = field(default_factory=dict)
     budget: Dict[str, float] = field(default_factory=dict)
+    router: Dict[str, object] = field(default_factory=dict)
 
     def registry(self) -> BackendRegistry:
         return BackendRegistry(self.backends)
+
+    @property
+    def use_router_classifier(self) -> bool:
+        return bool((self.router or {}).get("use_classifier", False))
 
 
 def _read_default(filename: str) -> dict:
@@ -71,6 +76,7 @@ def load_runtime_config() -> RuntimeConfig:
         chairman=dict(raw.get("chairman") or {}),
         architect=dict(raw.get("architect") or {}),
         budget=dict(raw.get("budget") or {}),
+        router=dict(raw.get("router") or {}),
     )
     hydrate_persistent_env(credential_env_names(config.backends))
     return config

@@ -120,9 +120,12 @@ def run_council(
     packs = packs if packs is not None else _load_all_packs(config)
     run_id = uuid.uuid4().hex[:16]
 
-    # Prefer deterministic scoring; inject architect backend as optional classifier.
+    # Prefer deterministic scoring; optional LLM classifier only when configured.
     router_generate = None
-    if not (request.pack or request.pack_path or request.dynamic):
+    if (
+        config.use_router_classifier
+        and not (request.pack or request.pack_path or request.dynamic)
+    ):
         try:
             router_generate = _make_generate(registry, config.architect, request.cwd)
         except Exception:
