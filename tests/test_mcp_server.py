@@ -9,7 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from council_core.input import CouncilRequest
-from council_core.mcp_server import _build_grounding_args, _check_backends, _convene, _list_packs
+from council_core.mcp_server import (
+    _authorized,
+    _build_grounding_args,
+    _check_backends,
+    _convene,
+    _list_packs,
+)
 from council_core.result import CouncilResult, ExecutionSummary
 from council_core.policy import RunStatus
 
@@ -90,3 +96,14 @@ def test_check_backends_shape():
     assert isinstance(status, dict) and status
     # values are "ready" or a human reason string
     assert all(isinstance(v, str) for v in status.values())
+
+
+def test_bearer_auth():
+    token = "s3cret-token"
+    assert _authorized("Bearer s3cret-token", token) is True
+    assert _authorized("bearer s3cret-token", token) is True  # scheme case-insensitive
+    assert _authorized("Bearer wrong", token) is False
+    assert _authorized("s3cret-token", token) is False        # missing scheme
+    assert _authorized("Basic s3cret-token", token) is False  # wrong scheme
+    assert _authorized(None, token) is False                  # no header
+    assert _authorized("Bearer s3cret-token", "") is False    # no configured token

@@ -18,7 +18,10 @@ Install: ``pip install 'council-core[mcp]'``. Run: ``council-mcp`` (stdio).
 
 from __future__ import annotations
 
+import argparse
+import os
 import re
+import secrets
 import shutil
 import tempfile
 from pathlib import Path
@@ -186,8 +189,76 @@ def build_server():
     return server
 
 
-def main() -> None:
-    build_server().run()  # stdio transport
+# --------------------------------------------------------------------------- #
+# Remote / HTTP transport (for the Claude mobile app via a custom connector)    #
+# --------------------------------------------------------------------------- #
+#
+# WARNING: exposing this to the internet runs the council on YOUR keys for anyone
+# who can reach it — always require the bearer token, and never bind 0.0.0.0
+# without a tunnel/proxy in front. The auth logic below is unit-tested; the ASGI
+# wiring needs the live ``mcp`` + ``uvicorn`` stack and is verified at runtime.
+
+def _token_from_env() -> Optional[str]:
+    return (os.environ.get("COUNCIL_MCP_TOKEN") or "").strip() or None
+
+
+def _authorized(auth_header: Optional[str], token: str) -> bool:
+    """Constant-time check of an ``Authorization: Bearer <token>`` header."""
+
+    if not token or not auth_header:
+        return False
+    scheme, _, value = auth_header.partition(" ")
+    if scheme.strip().lower() != "bearer":
+        return False
+    return secrets.compare_digest(value.strip(), token)
+
+
+def build_http_app(token: str):  # pragma: no cover - needs mcp + starlette
+    """FastMCP streamable-HTTP ASGI app, gated by a bearer-token middleware."""
+
+    server = build_server()
+    try:
+        app = server.streamable_http_app()
+    except AttributeError:  # API name differs across mcp versions
+        app = server.http_app()
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import JSONResponse
+
+    class _BearerAuth(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            if not _authorized(request.headers.get("authorization"), token):
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
+            return await call_next(request)
+
+    app.add_middleware(_BearerAuth)
+    return app
+
+
+def run_http(host: str = "127.0.0.1", port: int = 8787) -> None:  # pragma: no cover - live server
+    token = _token_from_env()
+    if not token:
+        raise SystemExit(
+            "Refusing to serve HTTP without auth: set COUNCIL_MCP_TOKEN to a strong secret."
+        )
+    import uvicorn
+
+    uvicorn.run(build_http_app(token), host=host, port=port)
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = argparse.ArgumentParser(prog="council-mcp", description="Council MCP server.")
+    parser.add_argument("--http", action="store_true",
+                        help="serve over HTTP for a remote connector (needs COUNCIL_MCP_TOKEN)")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="HTTP bind host (default 127.0.0.1; keep local, put a tunnel in front)")
+    parser.add_argument("--port", type=int, default=8787, help="HTTP port (default 8787)")
+    args = parser.parse_args(argv)
+
+    if args.http:
+        run_http(host=args.host, port=args.port)
+    else:
+        build_server().run()  # stdio transport
 
 
 if __name__ == "__main__":

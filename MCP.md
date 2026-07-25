@@ -72,10 +72,52 @@ packs"**, then **"convene a council on \<your question\>"**.
   documents aren't reachable by grounded agents.
 - **Secrets stay server-side** — only briefs and verdicts cross the MCP boundary.
 
-## Reaching claude.ai (web) instead
+## Remote: use it from your phone (claude.ai app)
 
-The stdio server above serves **local** clients (Claude Desktop, Claude Code).
-The claude.ai **website** only accepts **remote** connectors, which needs the
-server run over HTTPS with auth and registered as a custom connector — a bigger
-ops lift (TLS, a token/OAuth, keeping it up). The tool logic is identical; only
-the transport and auth differ. Do this only if the website specifically matters.
+Your phone runs the **cloud** Claude, which can't reach the local stdio server.
+For the phone you expose the council as a **remote connector**: run the same
+server over HTTP behind a tunnel, then register it on your Claude account (a
+connector is account-level, so it appears in the mobile app too). The multi-model
+dispatch still runs on your machine/host — only briefs and verdicts cross the
+network.
+
+> ⚠️ Exposing this runs the council on **your** keys for anyone who can reach it.
+> A bearer token is **required** (the server refuses to start HTTP without one),
+> and it binds `127.0.0.1` by default so only the tunnel can reach it.
+
+**Steps (cloudflared tunnel from your PC — free; PC must stay on):**
+
+1. **Pick a strong token** and set it, plus run the HTTP server:
+   ```bash
+   set COUNCIL_MCP_TOKEN=<paste a long random string>
+   council-mcp --http --port 8787       # or: python -m council_core.mcp_server --http
+   ```
+2. **Expose it** with a tunnel (install `cloudflared` first):
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:8787
+   ```
+   It prints a public `https://<random>.trycloudflare.com` URL.
+3. **Register it in claude.ai → Settings → Connectors** as a custom/remote MCP
+   connector, using that HTTPS URL. Supply the bearer token where the connector
+   asks for auth. Once added to your account it's available in the **Claude app
+   on your phone**.
+4. On the phone: *"use the council connector to convene a council on …"*.
+
+**Honest caveats (verify on your side):**
+- **This transport path isn't runtime-verified here** (needs a live `mcp` +
+  `uvicorn` + a running tunnel). The token/auth logic is unit-tested; the ASGI
+  wiring follows the FastMCP API and may need a small tweak for your installed
+  `mcp` version (the method is `streamable_http_app()` / `http_app()`).
+- **claude.ai custom-connector auth** may expect **OAuth** rather than a static
+  bearer header — check the current connector requirements in your claude.ai
+  settings. If it won't accept a bearer token directly, put the server behind an
+  edge that does auth (e.g. **Cloudflare Access**) and let the tunnel handle it.
+- **Uptime:** a `trycloudflare` URL and your PC must both be up when you want it
+  from the phone. For always-on, run the server on a small VM and use a stable
+  hostname instead of the throwaway tunnel URL.
+- **Documents** you send from the phone travel to the server — fine on your own
+  box; think twice for anything sensitive.
+
+For a quick brainstorm with **zero setup** (works on the phone today but is a
+single model role-playing the roster — no real cross-family diversity), that's a
+different "in-chat" skill, not this server.
