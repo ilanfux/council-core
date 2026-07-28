@@ -7,91 +7,118 @@ description: >-
   a council, run a multi-model review, peer-review a change across model
   families, review a PR/plan with advisors, evaluate a job offer or resume,
   ask about keren hishtalmut/pension/tax withdrawals, or says "ask the council"
-  / "council this" / "grounded cursor review". Prefers Cursor SDK multi-model
-  (`dev_cursor`) when CURSOR_API_KEY is set; otherwise free provider packs.
+  / "council this" / "grounded cursor review". Prefers the real Python council
+  when Cursor or provider API keys are ready; otherwise runs a same-model
+  in-chat simulation with no setup required.
 ---
 
 # Council skill
 
+Two modes. Prefer the real CLI when it can run; otherwise simulate locally in
+this chat. Never leave the user blocked on missing keys.
+
+## Mode selection (do this first)
+
+1. Try to run `council backends` from the repo venv if available:
+   - `C:\Projects\council-core\.venv\Scripts\council.exe backends`
+   - or `council backends` if on PATH
+2. **If at least one backend is ready** → **Real mode** (shell out to Python).
+3. **If no backends are ready, `council` is missing, or the check fails** →
+   **Simulated mode** (run entirely in this chat on the current model).
+4. Do **not** ask the user to set API keys before answering. Simulated mode is
+   the default zero-setup path.
+
+Optional: if the user explicitly says they want a *real multi-model* run, tell
+them which key to set. Otherwise just deliver a council verdict.
+
+## Real mode (API / Cursor key available)
+
 Shell out to the `council` CLI. Do **not** invent advisor answers yourself.
-The pack chooses models; you choose pack / mode / brief / grounding.
 
-## Prerequisites
-
-- `council` on PATH (`pip install -e .` from the council repo, or installed package).
-- Credentials from environment only (never write keys to files).
-- Optional: `CURSOR_API_KEY` + `pip install cursor-sdk` for grounded multi-model.
-- Cascade Priority C: pass the model *you* are running as
-  `--ui-model <id>` (or set `COUNCIL_UI_MODEL`) so the engine can fall back to
-  you if Cursor + provider APIs are unavailable.
-
-## When to trigger
+### Pack choice
 
 | User intent | Pack | Mode / notes |
 |---|---|---|
-| Code review / PR / bug hunt | `dev_cursor` if Cursor key ready, else `dev` | `--mode review` |
+| Code review / PR / bug hunt | `dev_cursor` when Cursor ready and repo grounding matters; else `dev` | `--mode review` |
 | Design / plan / architecture | same | `--mode plan` |
-| Career strategy / path | `career_cursor` if Cursor key ready, else `career` | `--mode strategy` |
-| Resume critique | same career pack | `--mode resume` |
-| Interview prep | same career pack | `--mode interview` |
-| Offer decision | same career pack | `--mode offer` |
-| Pension / tax / withdrawal / budget | `finance_cursor` if Cursor key ready, else `finance` | documents via `--ground` |
-| Multi-day driving / food / family trip | `travel` (primary); `travel_cursor` optional | documents via `--ground`; modes `plan`/`food`/`route` |
-| Novel / uncategorizable topic | `--dynamic` | no pack |
+| Career strategy / path | `career_cursor` only if Cursor ready and docs under `--cwd`; else `career` | `--mode strategy` |
+| Resume critique | same career rule | `--mode resume` |
+| Interview prep | same career rule | `--mode interview` |
+| Offer decision | same career rule | `--mode offer` |
+| Pension / tax / withdrawal / budget | `finance_cursor` only if Cursor ready and docs under `--cwd`; else `finance` | `--ground` docs |
+| Multi-day trip / food / route | `travel` by default; `travel_cursor` if Cursor grounding wanted | modes `plan`/`food`/`route` |
+| Novel topic | `--dynamic` | no pack |
 
-Always pass `--pack` or `--dynamic` explicitly (skills know intent — avoid
-`choice_required` round-trips). Use `--non-interactive`.
+Always pass `--pack` or `--dynamic` and `--non-interactive`. Prefer `--json`.
 
-## Steps
+### Grounding
 
-1. **Build a brief** from the user's request (and relevant file paths / diffs).
-2. **Pick pack + mode** from the table above.
-3. **Grounding**
-   - `dev` / `dev_cursor`: run with `--cwd` set to the repo root (git grounding).
-   - `finance` / `career` / `travel`: collect text docs and pass
-     `--ground "documents=label::C:\path\to\file.txt"` (repeatable). PDF/docx
-     must be exported to text for now.
-   - `*_cursor` **document** packs (`finance_cursor`, `career_cursor`,
-     `travel_cursor`): put those files under `--cwd` (or point `--cwd` at the
-     docs folder). Grounded Cursor agents are not injected the documents
-     bundle — they only browse `--cwd`. The CLI prints a loud banner if a
-     document path sits outside cwd while Cursor backends remain convened.
-4. **UI fallback model**: if you know your own model id, add
-   `--ui-model <id>`. Prefer Cursor backend for that fallback
-   (`--ui-backend cursor`) when a Cursor key exists.
-5. **Run** (prefer JSON so you can parse status/warnings):
+- `dev` / `dev_cursor`: `--cwd` = repo root.
+- `finance` / `career` / `travel`: `--ground "documents=label::path"`.
+- Document `*_cursor` packs: put files under `--cwd` (agents only browse cwd).
+
+### Run
 
 ```bash
 council run --pack <id> --mode <mode> --stakes standard --non-interactive --json \
   --cwd <repo> \
-  --ui-model <your-model-id> \
   --brief "<concise brief>"
 ```
 
-For Cursor-grounded code review:
+Present stderr model map + `markdown` / `verdict.text`. Do not silently rewrite
+the Chairman's conclusion. Mention `cascade_tier` and warnings.
 
-```bash
-council run --pack dev_cursor --mode review --stakes thorough --non-interactive --json \
-  --cwd <repo> --brief "<what to review>"
+## Simulated mode (no backends / zero setup)
+
+This is the easy path. Stay in this chat. Role-play a small council on the
+**current model**. Mark the output clearly as simulated.
+
+### Rules
+
+1. Read the user's materials yourself (resume, PR, docs, repo files).
+2. Pick 3–5 distinct advisor personas for the topic, always including:
+   - a domain specialist (or 1–2)
+   - a Risk / Skeptic auditor
+   - a Fact / Evidence analyst
+   - a Chairman who synthesizes last
+3. Write each advisor's take **separately** (short, opinionated, not identical).
+4. Have the Chairman produce one decisive verdict. Do not end on "it depends."
+5. Label the run up front:
+
+```text
+Mode: simulated (same chat model — not a real multi-model council)
 ```
 
-6. **Before/during output**: the CLI prints a persona→model map to stderr
-   *before* dispatch. Surface that map to the user briefly, then present the
-   verdict. With `--json`, also read `model_assignments` and `cascade_tier`.
-7. **Present** `markdown` (or `verdict.text`) to the user. Mention warnings and
-   any failed advisors. Do not silently rewrite the Chairman's conclusion.
+6. Keep it useful and concrete. Cite file paths / evidence you actually read.
+7. At the end, add one line: real multi-model diversity needs a provider key or
+   `CURSOR_API_KEY`; until then this is a same-model simulation.
 
-## Pack quick reference
+### Output shape
 
-- `council packs` — list packs
-- `council backends` — which keys are ready
-- `council models --pack dev_cursor` — Cursor catalog + resolution preview
+```markdown
+Mode: simulated (same chat model — not a real multi-model council)
 
-## Failure handling
+### Advisors
+- <Persona 1>: ...
+- <Persona 2>: ...
+- <Persona 3>: ...
 
-- Exit 2 + `route.kind == choice_required`: ask the user which pack, then re-run
-  with `--pack` / `--dynamic`.
-- Cursor missing: cascade falls to provider APIs, then `--ui-model`. Tell the
-  user which cascade tier ran (`cascade_tier` in JSON).
-- `council` not found: tell the user to `pip install -e C:\council` (or their
-  clone path) and re-run `council skill install`.
+### Peer-style tensions
+- Where they disagree (1–3 bullets)
+
+### Chairman verdict
+- Decisive recommendation
+- Key risks
+- One concrete next action
+```
+
+For resume / career / finance / travel / code review, adapt the chairman
+sections to the domain (e.g. SHIP/FIX for review; hire-fit + rewrite notes for
+resume).
+
+## Quick reference
+
+- Real mode when backends ready: `council packs`, `council backends`, `council models --pack dev_cursor`
+- Simulated mode when nothing is ready: no install, no keys, just answer
+- If `council` not found and user wants real mode later:
+  `pip install -e C:\Projects\council-core` then `council skill install`
