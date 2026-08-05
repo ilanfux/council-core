@@ -1,8 +1,18 @@
-# Dev is not high-stakes: tolerate individual advisor failures and synthesize a
-# verdict from whoever completed. No structurally-required roles.
+# Dev tolerates individual advisor failures, but not a review of nothing.
+#
+# Two floors, added after a real run reported COMPLETED while grounding produced
+# 0 evidence items: the advisors reviewed a summary instead of code, invented a
+# ZeroDivisionError that did not exist, and missed a requirement violation that
+# was in a spec file they were never shown.
+#
+#   min_grounding_items    — an ungrounded council is not a weaker check, it is a
+#                            confident one that never looked. Fail closed.
+#   min_completed_advisors — one surviving advisor is an opinion, not a council.
 required_successful_roles: []
 on_missing_required_role: degrade_with_warning
-min_completed_advisors: 1
+min_completed_advisors: 3
 min_completed_reviews: 0
+min_grounding_items: 1
+on_insufficient_grounding: fail_closed
 allow_same_family_fallback: true
 chairman_when_required_analysis_missing: synthesize_with_gap_note

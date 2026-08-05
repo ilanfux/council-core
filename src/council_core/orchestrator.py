@@ -72,12 +72,28 @@ def _apply_policy(
     advisor_results,
     peer_reviews,
     chairman_ok: bool,
+    grounding_items: int = -1,
 ) -> Tuple[RunStatus, List[str]]:
     policy: ExecutionPolicy = council.execution_policy
     warnings: List[str] = []
     completed = [a for a in advisor_results if a.outcome.ok]
 
     status = RunStatus.COMPLETED
+
+    # Evidence floor, checked first: a review of nothing is worse than no review,
+    # because it still produces confident findings. ``grounding_items < 0`` means
+    # the caller did not supply a count, so the check is skipped.
+    if policy.min_grounding_items > 0 and 0 <= grounding_items < policy.min_grounding_items:
+        msg = (
+            f"grounding produced {grounding_items} evidence item(s) "
+            f"(min {policy.min_grounding_items}); advisors would be reviewing nothing"
+        )
+        if policy.on_insufficient_grounding == MissingRoleBehavior.FAIL_CLOSED:
+            warnings.append(f"FAIL-CLOSED: {msg}")
+            status = RunStatus.FAILED
+        else:
+            warnings.append(f"DEGRADED: {msg}")
+            status = RunStatus.DEGRADED
 
     # mandatory role coverage
     ok_roles = {a.persona.role_id for a in completed if a.persona.role_id}
@@ -89,7 +105,9 @@ def _apply_policy(
             status = RunStatus.FAILED
         else:
             warnings.append(f"DEGRADED: {msg}")
-            status = RunStatus.DEGRADED
+            # Never launder an earlier FAILED into a mere DEGRADED.
+            if status != RunStatus.FAILED:
+                status = RunStatus.DEGRADED
 
     if len(completed) < policy.min_completed_advisors:
         # A hard floor: below the minimum, there is not enough signal to trust a
@@ -263,6 +281,31 @@ def run_council(
         bundle=bundle, cwd=request.cwd, council=council, registry=registry
     )
 
+    # Fail fast on an empty evidence floor: there is no point paying for advisors
+    # to review nothing, and their output would be confident and unfounded. This
+    # mirrors the post-run check in _apply_policy, but before any tokens are spent.
+    _policy: ExecutionPolicy = council.execution_policy
+    if (
+        _policy.min_grounding_items > 0
+        and len(bundle.items) < _policy.min_grounding_items
+        and _policy.on_insufficient_grounding == MissingRoleBehavior.FAIL_CLOSED
+    ):
+        msg = (
+            f"grounding produced {len(bundle.items)} evidence item(s) "
+            f"(min {_policy.min_grounding_items}); advisors would be reviewing nothing"
+        )
+        warnings.append(f"FAIL-CLOSED: {msg}")
+        stages.append(StageOutcome("dispatch", "skipped", "insufficient grounding"))
+        return CouncilResult(
+            convened=True, route=route, council=council, grounding=bundle,
+            advisor_results=[], peer_reviews=[], verdict=None,
+            execution=ExecutionSummary(status=RunStatus.FAILED, stages=stages),
+            warnings=warnings, run_id=run_id,
+            model_assignments=list(resolution.assignments),
+            cascade_tier=getattr(resolution, "tier", "") or "",
+            unreachable_grounding_docs=list(unreachable_docs),
+        ), None
+
     # Credential pre-check (warn, don't hard-fail; failed personas are captured).
     for name in {p.backend for p in council.advisors} | {council.chairman.backend}:
         try:
@@ -321,7 +364,13 @@ def run_council(
             contract_violations = council.output_contract.validate(verdict.text)
             warnings.extend(contract_violations)
 
-    status, policy_warnings = _apply_policy(council, advisor_results, peer_reviews, bool(verdict and verdict.ok))
+    status, policy_warnings = _apply_policy(
+        council,
+        advisor_results,
+        peer_reviews,
+        bool(verdict and verdict.ok),
+        grounding_items=len(bundle.items),
+    )
     warnings.extend(policy_warnings)
 
     result = CouncilResult(

@@ -1,8 +1,10 @@
-# Dev is not high-stakes: tolerate individual advisor failures and synthesize a
-# verdict from whoever completed. No structurally-required roles.
+# Same floors as the `dev` pack — see that file for the incident behind them.
+# An ungrounded council is a confident review of nothing; fail closed instead.
 required_successful_roles: []
 on_missing_required_role: degrade_with_warning
-min_completed_advisors: 1
+min_completed_advisors: 3
 min_completed_reviews: 0
+min_grounding_items: 1
+on_insufficient_grounding: fail_closed
 allow_same_family_fallback: true
 chairman_when_required_analysis_missing: synthesize_with_gap_note

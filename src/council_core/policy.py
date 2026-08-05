@@ -34,6 +34,12 @@ class ExecutionPolicy:
     max_retries: int = 0
     chairman_when_required_analysis_missing: str = "synthesize_with_gap_note"  # or "fail_closed"
     on_budget_exhausted: str = "degrade"  # or "stop"
+    # Evidence floor. A council that reviewed nothing is not a weaker review — it
+    # is a confident one that never looked, which is worse than no review at all.
+    # Default 0 keeps existing packs behaving exactly as before; packs that review
+    # artifacts (dev) set this to >= 1 and fail closed.
+    min_grounding_items: int = 0
+    on_insufficient_grounding: MissingRoleBehavior = MissingRoleBehavior.DEGRADE_WITH_WARNING
 
     @classmethod
     def from_dict(cls, data: Dict) -> "ExecutionPolicy":
@@ -50,6 +56,13 @@ class ExecutionPolicy:
         except ValueError:
             behavior = MissingRoleBehavior.DEGRADE_WITH_WARNING
 
+        try:
+            grounding_behavior = MissingRoleBehavior(
+                str(data.get("on_insufficient_grounding", "degrade_with_warning"))
+            )
+        except ValueError:
+            grounding_behavior = MissingRoleBehavior.DEGRADE_WITH_WARNING
+
         return cls(
             required_successful_roles={str(r).strip() for r in data.get("required_successful_roles", []) if r},
             on_missing_required_role=behavior,
@@ -61,4 +74,6 @@ class ExecutionPolicy:
                 data.get("chairman_when_required_analysis_missing", "synthesize_with_gap_note")
             ),
             on_budget_exhausted=str(data.get("on_budget_exhausted", "degrade")),
+            min_grounding_items=_int("min_grounding_items", 0),
+            on_insufficient_grounding=grounding_behavior,
         )
