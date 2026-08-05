@@ -13,12 +13,20 @@ async API and bridge each stage with ``asyncio.run()``.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
+import secrets
 import sys
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from council_core.backends.base import BackendError
 from council_core.input import AgentOutcome
+
+# Wall-clock ceiling for a single agent run. Without this, one stalled agent
+# blocks the whole asyncio.gather forever; a resume review that should take
+# ~3 minutes was observed running 4144s because a single advisor never
+# returned. Override with COUNCIL_AGENT_TIMEOUT (seconds); 0 disables.
+DEFAULT_AGENT_TIMEOUT = 420.0
 
 # A model selection is either a plain id string or a built ModelSelection dict.
 ModelSpec = Union[str, Mapping[str, Any]]
@@ -54,6 +62,45 @@ def _require_api_key(explicit: Optional[str] = None) -> str:
     return api_key.strip()
 
 
+def _dash_free_auth_token() -> str:
+    """Loopback callback token that can never look like a command-line flag.
+
+    ``secrets.token_hex(32)`` carries the same 256 bits as the SDK's
+    ``token_urlsafe(32)`` but draws from ``[0-9a-f]`` only.
+    """
+
+    return secrets.token_hex(32)
+
+
+def _patch_callback_tokens(sdk) -> None:
+    """Stop the bridge from rejecting its own auth token.
+
+    ``AsyncBridge.launch`` passes the loopback callback tokens as argv pairs
+    (``--tool-callback-auth-token <token>``). The bridge parses them with
+    ``takeValue()``, which rejects *any* value starting with ``-`` as a missing
+    value. The SDK mints those tokens with ``secrets.token_urlsafe(32)``, whose
+    base64url alphabet contains ``-``, so roughly 1 launch in 64 dies at
+    argument parsing with ``Error: Missing value for --tool-callback-auth-token``
+    before the agent ever runs.
+
+    Patched here rather than in site-packages so a ``pip install -U cursor-sdk``
+    does not silently reintroduce it. Idempotent, and a no-op if upstream ever
+    renames the hook.
+    """
+
+    for module_name in ("_tool_callback", "_store_callback"):
+        try:
+            module = importlib.import_module(f"cursor_sdk.{module_name}")
+        except Exception:  # pragma: no cover - upstream layout changed
+            continue
+        if getattr(module, "_new_auth_token", None) is None:
+            continue
+        if getattr(module._new_auth_token, "_council_dash_safe", False):
+            continue
+        _dash_free_auth_token._council_dash_safe = True  # type: ignore[attr-defined]
+        module._new_auth_token = _dash_free_auth_token
+
+
 def _import_sdk():
     try:
         import cursor_sdk  # type: ignore
@@ -62,7 +109,21 @@ def _import_sdk():
             "cursor-sdk is not installed. Install it with `pip install cursor-sdk` "
             f"(underlying error: {error})."
         ) from error
+    _patch_callback_tokens(cursor_sdk)
     return cursor_sdk
+
+
+def _agent_timeout() -> Optional[float]:
+    """Per-agent wall-clock ceiling; ``None`` when explicitly disabled."""
+
+    raw = os.environ.get("COUNCIL_AGENT_TIMEOUT", "").strip()
+    if not raw:
+        return DEFAULT_AGENT_TIMEOUT
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_AGENT_TIMEOUT
+    return None if value <= 0 else value
 
 
 def _run_async(coro):
@@ -113,9 +174,10 @@ def run_agents_batch(
     """Run several one-shot local agents concurrently against ``cwd``.
 
     Uses a single async bridge and ``asyncio.gather``, preserving task order in the
-    returned list. A startup failure (CursorAgentError: never executed) and a run
-    failure (RunResult.status == 'error') are normalized distinctly. One failed
-    task never sinks the batch.
+    returned list. A startup failure (CursorAgentError: never executed), a run
+    failure (RunResult.status == 'error') and a stall (status == 'timeout') are
+    normalized distinctly. One failed task never sinks the batch, and no single
+    task can hold the batch past ``COUNCIL_AGENT_TIMEOUT``.
     """
 
     if not tasks:
@@ -124,12 +186,22 @@ def run_agents_batch(
     sdk = _import_sdk()
     cursor_agent_error = getattr(sdk, "CursorAgentError", Exception)
 
+    timeout = _agent_timeout()
+
     async def _one(client, prompt: str, model: ModelSpec) -> AgentOutcome:
         try:
-            result = await sdk.AsyncAgent.prompt(
+            call = sdk.AsyncAgent.prompt(
                 prompt,
                 sdk.AgentOptions(api_key=key, model=model, local=sdk.LocalAgentOptions(cwd=cwd)),
                 client=client,
+            )
+            result = await (asyncio.wait_for(call, timeout) if timeout else call)
+        except asyncio.TimeoutError:
+            # Bound the blast radius: this advisor is lost, the batch is not.
+            return AgentOutcome(
+                status="timeout",
+                text="",
+                error_message=f"agent exceeded COUNCIL_AGENT_TIMEOUT ({timeout:.0f}s)",
             )
         except cursor_agent_error as error:  # startup failure: never executed
             return AgentOutcome(

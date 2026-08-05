@@ -60,7 +60,7 @@ class CouncilRequest:
 class AgentOutcome:
     """Normalized result of a single backend agent run."""
 
-    status: str  # "finished" | "error" | "startup_error"
+    status: str  # "finished" | "error" | "startup_error" | "timeout"
     text: str
     run_id: Optional[str] = None
     agent_id: Optional[str] = None
